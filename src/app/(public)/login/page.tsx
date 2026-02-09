@@ -1,13 +1,25 @@
 'use client';
 
-import { useState, SubmitEventHandler } from 'react';
+import { useState, SubmitEventHandler, useEffect } from 'react';
 import { Box, Button, Card, CardContent, TextField, Typography, Link } from '@mui/material';
+import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading, login } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const handleSubmit: SubmitEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
@@ -15,24 +27,30 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
+        skipAuthHeader: true,
+        skipAuthRedirectOn401: true,
       });
 
-      const data: { token?: string; error?: string } = await res.json();
+      const data: {
+        session?: string;
+        user?: { id: number; email: string };
+        error?: string;
+      } = await res.json();
 
       if (!res.ok) {
         throw new Error(data.error ?? 'Login failed');
       }
 
-      if (!data.token) {
+      if (!data.session || !data.user) {
         throw new Error('Invalid server response');
       }
 
-      localStorage.setItem('token', data.token);
-      console.log('Login success');
+      localStorage.setItem('session', data.session);
+      login(data.user);
+      router.replace('/dashboard');
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -43,6 +61,10 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <Box
