@@ -1,19 +1,15 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
-
-type User = {
-  id: number;
-  email: string;
-};
+import { User } from '@/app/(protected)/users/users.type';
 
 type AuthContextType = {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
-  login: (user: User) => void;
+  refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -22,36 +18,53 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
+  const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
+
+  const refreshUser = async () => {
+    const session = localStorage.getItem('session');
+
+    if (!session) {
+      setUser(null);
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, {
+        method: 'GET',
+        router,
+      });
+
+      if (!res.ok) throw new Error();
+
+      const data = await res.json();
+
+      setUser(data);
+      setIsAuthenticated(true);
+    } catch {
+      localStorage.removeItem('session');
+      setUser(null);
+      setIsAuthenticated(false);
+    }
+  };
 
   useEffect(() => {
-    const bootstrapAuth = async () => {
-      try {
-        const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, { router });
-        const user = await res.json();
-        setUser(user);
-        setIsAuthenticated(true);
-      } catch {
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    bootstrapAuth();
-  }, [router]);
-
-  const login = (user: User) => {
-    setUser(user);
-    setIsAuthenticated(true);
-  };
+    (async () => {
+      await refreshUser();
+      setIsLoading(false);
+    })();
+  }, []);
 
   const logout = async () => {
     try {
-      await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, { method: 'POST', router });
+      await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+        method: 'POST',
+        router,
+      });
     } catch {
+      // ignore
     } finally {
       localStorage.removeItem('session');
       setUser(null);
@@ -59,14 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace('/login');
     }
   };
-
   return (
     <AuthContext.Provider
       value={{
         user,
         isAuthenticated,
         isLoading,
-        login,
+        refreshUser,
         logout,
       }}
     >
@@ -77,8 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
