@@ -130,7 +130,6 @@ export default function ExpensePage() {
             value={to}
             onChange={(value) => setTo(value)}
             minDate={from ?? undefined}
-            maxDate={today}
             slotProps={{ textField: { size: 'small' } }}
           />
 

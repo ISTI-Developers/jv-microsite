@@ -103,8 +103,19 @@ export default function DataTable<T>({
         backgroundColor: 'background.paper',
       }}
     >
-      <TableContainer>
-        <Table size="small">
+      <TableContainer
+        sx={{
+          overflowX: 'auto',
+          maxWidth: '100%',
+        }}
+      >
+        <Table
+          size="small"
+          stickyHeader
+          sx={{
+            minWidth: 1800,
+          }}
+        >
           <TableHead>
             <TableRow sx={{ backgroundColor: 'grey.50' }}>
               <TableCell
@@ -116,6 +127,7 @@ export default function DataTable<T>({
                   borderColor: 'divider',
                   py: 1.5,
                   width: 60,
+                  whiteSpace: 'nowrap',
                 }}
               >
                 #
@@ -132,6 +144,7 @@ export default function DataTable<T>({
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                     py: 1.5,
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {col.header}
@@ -187,6 +200,7 @@ export default function DataTable<T>({
                           fontWeight: 500,
                           color: 'text.secondary',
                           width: 60,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {rowNumber}
@@ -200,6 +214,7 @@ export default function DataTable<T>({
                             fontSize: 14,
                             py: 1.5,
                             color: 'text.primary',
+                            whiteSpace: 'nowrap',
                           }}
                         >
                           {col.render(row)}

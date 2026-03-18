@@ -50,9 +50,18 @@ export default function Sidebar() {
         return [
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Users', href: '/users' },
+          { label: 'Expenses', href: '/expense' },
+          { label: 'Revenues', href: '/revenue' },
+          { label: 'MOAs', href: '/expense-moas' },
         ];
       case Roles.JOINT_VENTURE:
-        return [{ label: 'Dashboard', href: '/dashboard' }];
+        return [
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Expenses', href: '/expense' },
+          { label: 'Revenues', href: '/revenue' },
+          { label: 'MOAs', href: '/jv/expense-moas' },
+        ];
+
       default:
         return [{ label: 'Dashboard', href: '/dashboard' }];
     }
