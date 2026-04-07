@@ -4,27 +4,27 @@
 import { ROLE_LABELS, Roles } from '@/constants/roles';
 import { ACTIVE_STATUS_CONFIG, FORCE_PASSWORD_CHANGE_CONFIG } from '@/constants/userStatus';
 import { apiFetch } from '@/lib/api';
-import {
-  Box,
-  Typography,
-  Button,
-  Chip,
-  CircularProgress,
-  TextField,
-  IconButton,
-  Tooltip,
-  MenuItem,
-} from '@mui/material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import ToggleOnIcon from '@mui/icons-material/ToggleOn';
-import ToggleOffIcon from '@mui/icons-material/ToggleOff';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Eye, Power, RotateCcw } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { User } from './users.type';
 import DataTable, { Column } from '../components/DataTable';
 import UserProfileModal from './UserProfileModal';
 import AppModal from '../components/AppModal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+
+function StatusPill({ label, tone = 'default' }: { label: string; tone?: 'default' | 'success' | 'warning' }) {
+  const toneClass =
+    tone === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : tone === 'warning'
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-slate-200 bg-slate-50 text-slate-700';
+
+  return <span className={cn('inline-flex rounded-full border px-2.5 py-1 text-xs font-medium', toneClass)}>{label}</span>;
+}
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
@@ -43,12 +43,15 @@ export default function UsersPage() {
     queryFn: async () => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users`);
       const data = await res.json();
+
       if (!res.ok) {
         throw new Error(data.error || 'Failed to fetch users');
       }
+
       return data.users;
     },
   });
+
   const resetMutation = useMutation({
     mutationFn: async (userId: number) => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/reset-password`, {
@@ -67,15 +70,12 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       alert('Temporary password sent.');
     },
-    onError: (error) => {
-      if (error instanceof Error) alert(error.message);
+    onError: (mutationError) => {
+      if (mutationError instanceof Error) alert(mutationError.message);
       else alert('Something went wrong');
     },
   });
-  const handleReset = (userId: number) => {
-    if (!confirm('Reset password for this user?')) return;
-    resetMutation.mutate(userId);
-  };
+
   const inviteMutation = useMutation({
     mutationFn: async ({ email, role_id }: { email: string; role_id: number }) => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/invite`, {
@@ -96,11 +96,12 @@ export default function UsersPage() {
       setOpenInvite(false);
       setInviteEmail('');
     },
-    onError: (error) => {
-      if (error instanceof Error) alert(error.message);
+    onError: (mutationError) => {
+      if (mutationError instanceof Error) alert(mutationError.message);
       else alert('Something went wrong');
     },
   });
+
   const toggleMutation = useMutation({
     mutationFn: ({ userId, status }: { userId: number; status: 0 | 1 }) =>
       apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/toggle-status`, {
@@ -114,30 +115,32 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
+
+  const handleReset = (userId: number) => {
+    if (!confirm('Reset password for this user?')) return;
+    resetMutation.mutate(userId);
+  };
+
   const handleInvite = () => {
     if (!inviteEmail.trim()) {
       alert('Email is required');
       return;
     }
+
     inviteMutation.mutate({
       email: inviteEmail.trim().toLowerCase(),
       role_id: inviteRole,
     });
   };
+
   if (isLoading) {
-    return (
-      <Box p={3}>
-        <CircularProgress />
-      </Box>
-    );
+    return <div className="p-3 text-sm text-muted-foreground">Loading users...</div>;
   }
+
   if (error instanceof Error) {
-    return (
-      <Box p={3}>
-        <Typography color="error">{error.message}</Typography>
-      </Box>
-    );
+    return <div className="p-3 text-sm text-red-600">{error.message}</div>;
   }
+
   const columns: Column<User>[] = [
     {
       header: 'Email',
@@ -153,89 +156,86 @@ export default function UsersPage() {
     },
     {
       header: 'Role',
-      render: (user) => <Chip size="small" label={ROLE_LABELS[user.role_id] ?? '—'} />,
+      render: (user) => <StatusPill label={ROLE_LABELS[user.role_id] ?? '—'} />,
     },
     {
       header: 'Active',
       render: (user) => {
         const active = ACTIVE_STATUS_CONFIG[user.is_active ? 1 : 0];
-        return <Chip size="small" label={active.label} color={active.color} />;
+        return <StatusPill label={active.label} tone={active.color === 'success' ? 'success' : 'default'} />;
       },
     },
     {
       header: 'Force Change Password',
       render: (user) => {
         const force = FORCE_PASSWORD_CHANGE_CONFIG[user.force_password_change ? 1 : 0];
-        return <Chip size="small" label={force.label} color={force.color} />;
+        return <StatusPill label={force.label} tone={force.color === 'warning' ? 'warning' : 'default'} />;
       },
     },
     {
       header: 'Last Login',
-      render: (user) =>
-        user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never',
+      render: (user) => (user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'),
     },
     {
       header: 'Actions',
       align: 'right',
       render: (user) => {
         const isActive = user.is_active === 1;
+
         return (
-          <Box display="flex" gap={1} justifyContent="flex-end">
-            <Tooltip title="View Profile">
-              <IconButton size="small" onClick={() => setSelectedUser(user)}>
-                <VisibilityIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              title="View Profile"
+              className="rounded-lg border border-input p-2 transition hover:bg-muted"
+              onClick={() => setSelectedUser(user)}
+            >
+              <Eye className="size-4" />
+            </button>
 
-            <Tooltip title="Reset Password">
-              <IconButton
-                size="small"
-                onClick={() => handleReset(user.id)}
-                disabled={resetMutation.isPending}
-              >
-                <RestartAltIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <button
+              type="button"
+              title="Reset Password"
+              className="rounded-lg border border-input p-2 transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => handleReset(user.id)}
+              disabled={resetMutation.isPending}
+            >
+              <RotateCcw className="size-4" />
+            </button>
 
-            <Tooltip title={isActive ? 'Deactivate User' : 'Activate User'}>
-              <IconButton
-                size="small"
-                color={isActive ? 'success' : 'error'}
-                onClick={() =>
-                  toggleMutation.mutate({
-                    userId: user.id,
-                    status: isActive ? 0 : 1,
-                  })
-                }
-                disabled={toggleMutation.isPending}
-              >
-                {isActive ? <ToggleOnIcon fontSize="small" /> : <ToggleOffIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          </Box>
+            <button
+              type="button"
+              title={isActive ? 'Deactivate User' : 'Activate User'}
+              className={cn(
+                'rounded-lg border p-2 transition disabled:pointer-events-none disabled:opacity-50',
+                isActive ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-rose-200 text-rose-700 hover:bg-rose-50'
+              )}
+              onClick={() =>
+                toggleMutation.mutate({
+                  userId: user.id,
+                  status: isActive ? 0 : 1,
+                })
+              }
+              disabled={toggleMutation.isPending}
+            >
+              <Power className="size-4" />
+            </button>
+          </div>
         );
       },
     },
   ];
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" mb={4}>
-        <Typography variant="h4" fontWeight={600}>
-          Users
-        </Typography>
-        <Button variant="contained" onClick={() => setOpenInvite(true)}>
-          Invite User
-        </Button>
-      </Box>
+    <div>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
+        <Button onClick={() => setOpenInvite(true)}>Invite User</Button>
+      </div>
 
       <DataTable rows={users ?? []} columns={columns} getRowKey={(row) => row.id} />
-      <UserProfileModal
-        key={selectedUser?.id ?? 'none'}
-        open={!!selectedUser}
-        user={selectedUser}
-        onClose={() => setSelectedUser(null)}
-      />
+
+      <UserProfileModal key={selectedUser?.id ?? 'none'} open={!!selectedUser} user={selectedUser} onClose={() => setSelectedUser(null)} />
 
       <AppModal
         open={openInvite}
@@ -244,34 +244,39 @@ export default function UsersPage() {
         maxWidth="xs"
         actions={
           <>
-            <Button onClick={() => setOpenInvite(false)}>Cancel</Button>
-            <Button variant="contained" onClick={handleInvite} disabled={inviteMutation.isPending}>
+            <Button variant="outline" onClick={() => setOpenInvite(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleInvite} disabled={inviteMutation.isPending}>
               Send Invite
             </Button>
           </>
         }
       >
-        <Box display="flex" flexDirection="column" gap={2} mt={1}>
-          <TextField
-            label="Email"
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            fullWidth
-          />
+        <div className="flex flex-col gap-4 pt-1">
+          <div className="space-y-2">
+            <label htmlFor="invite-email" className="text-sm font-medium">
+              Email
+            </label>
+            <Input id="invite-email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="h-10" />
+          </div>
 
-          <TextField
-            select
-            label="Role"
-            value={inviteRole}
-            onChange={(e) => setInviteRole(Number(e.target.value))}
-            fullWidth
-          >
-            <MenuItem value={Roles.ADMIN}>Admin</MenuItem>
-            <MenuItem value={Roles.JOINT_VENTURE}>Joint Venture</MenuItem>
-          </TextField>
-        </Box>
+          <div className="space-y-2">
+            <label htmlFor="invite-role" className="text-sm font-medium">
+              Role
+            </label>
+            <select
+              id="invite-role"
+              value={inviteRole}
+              onChange={(e) => setInviteRole(Number(e.target.value))}
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+            >
+              <option value={Roles.ADMIN}>Admin</option>
+              <option value={Roles.JOINT_VENTURE}>Joint Venture</option>
+            </select>
+          </div>
+        </div>
       </AppModal>
-    </Box>
+    </div>
   );
 }

@@ -1,11 +1,12 @@
 'use client';
 
-import { Box, Button, TextField, MenuItem } from '@mui/material';
 import { useState } from 'react';
 import AppModal from '../components/AppModal';
 import { User } from './users.type';
 import { useAuth } from '@/context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 type Props = {
   open: boolean;
   user: User | null;
@@ -17,9 +18,7 @@ export default function UserProfileModal({ open, user, onClose }: Props) {
   const queryClient = useQueryClient();
   const [firstName, setFirstName] = useState(user?.profile?.first_name ?? '');
   const [lastName, setLastName] = useState(user?.profile?.last_name ?? '');
-  const [entityType, setEntityType] = useState<'individual' | 'company'>(
-    (user?.profile?.entity_type as 'individual' | 'company') ?? 'individual'
-  );
+  const [entityType, setEntityType] = useState<'individual' | 'company'>((user?.profile?.entity_type as 'individual' | 'company') ?? 'individual');
   const [companyName, setCompanyName] = useState(user?.profile?.company_name ?? '');
   if (!user) return null;
 
@@ -63,50 +62,59 @@ export default function UserProfileModal({ open, user, onClose }: Props) {
       maxWidth="sm"
       actions={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave}>
-            Save
+          <Button variant="outline" onClick={onClose}>
+            Cancel
           </Button>
+          <Button onClick={handleSave}>Save</Button>
         </>
       }
     >
-      <Box display="flex" flexDirection="column" gap={2}>
-        <TextField label="Email" value={user.email} disabled fullWidth />
+      <div className="flex flex-col gap-4">
+        <div className="space-y-2">
+          <label htmlFor="profile-email" className="text-sm font-medium">
+            Email
+          </label>
+          <Input id="profile-email" value={user.email} disabled className="h-10" />
+        </div>
 
-        <TextField
-          label="First Name"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          fullWidth
-        />
+        <div className="space-y-2">
+          <label htmlFor="profile-first-name" className="text-sm font-medium">
+            First Name
+          </label>
+          <Input id="profile-first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="h-10" />
+        </div>
 
-        <TextField
-          label="Last Name"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          fullWidth
-        />
+        <div className="space-y-2">
+          <label htmlFor="profile-last-name" className="text-sm font-medium">
+            Last Name
+          </label>
+          <Input id="profile-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} className="h-10" />
+        </div>
 
-        <TextField
-          select
-          label="Entity Type"
-          value={entityType}
-          onChange={(e) => setEntityType(e.target.value as 'individual' | 'company')}
-          fullWidth
-        >
-          <MenuItem value="individual">Individual</MenuItem>
-          <MenuItem value="company">Company</MenuItem>
-        </TextField>
+        <div className="space-y-2">
+          <label htmlFor="profile-entity-type" className="text-sm font-medium">
+            Entity Type
+          </label>
+          <select
+            id="profile-entity-type"
+            value={entityType}
+            onChange={(e) => setEntityType(e.target.value as 'individual' | 'company')}
+            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+          >
+            <option value="individual">Individual</option>
+            <option value="company">Company</option>
+          </select>
+        </div>
 
         {entityType === 'company' && (
-          <TextField
-            label="Company Name"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            fullWidth
-          />
+          <div className="space-y-2">
+            <label htmlFor="profile-company-name" className="text-sm font-medium">
+              Company Name
+            </label>
+            <Input id="profile-company-name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="h-10" />
+          </div>
         )}
-      </Box>
+      </div>
     </AppModal>
   );
 }

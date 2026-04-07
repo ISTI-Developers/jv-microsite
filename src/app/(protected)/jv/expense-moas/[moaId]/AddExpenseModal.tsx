@@ -2,10 +2,11 @@
 
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Box, Typography, Button, Divider, TextField } from '@mui/material';
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import AppModal from '@/app/(protected)/components/AppModal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 type Location = {
   id: number;
@@ -51,9 +52,7 @@ export default function JVExpenseMoaDetailPage() {
     date: '',
   });
 
-  const [expenses, setExpenses] = useState<
-    Record<number, { name: string; amount: number; date: string }[]>
-  >({});
+  const [expenses, setExpenses] = useState<Record<number, { name: string; amount: number; date: string }[]>>({});
 
   const addExpense = () => {
     if (!selectedCategory) return;
@@ -101,28 +100,25 @@ export default function JVExpenseMoaDetailPage() {
   });
 
   return (
-    <Box>
-      <Typography variant="h5" mb={2}>
-        {data?.moa.moa_name}
-      </Typography>
+    <div>
+      <h1 className="mb-3 text-2xl font-semibold tracking-tight">{data?.moa.moa_name}</h1>
 
-      <Typography variant="subtitle1">Locations</Typography>
+      <p className="text-sm font-medium text-muted-foreground">Locations</p>
       {data?.locations.map((loc) => (
-        <Box key={loc.id}>{loc.location_name}</Box>
+        <div key={loc.id} className="text-sm">
+          {loc.location_name}
+        </div>
       ))}
 
-      <Divider sx={{ my: 2 }} />
+      <div className="my-4 border-t border-border" />
 
-      <Typography variant="h6" mb={2}>
-        Categories
-      </Typography>
+      <h2 className="mb-3 text-lg font-semibold">Categories</h2>
 
       {data?.categories.map((cat) => (
-        <Box key={cat.id} mb={2}>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography>{cat.name}</Typography>
+        <div key={cat.id} className="mb-4 rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-medium">{cat.name}</p>
             <Button
-              variant="contained"
               size="small"
               onClick={() => {
                 setSelectedCategory(cat);
@@ -131,22 +127,17 @@ export default function JVExpenseMoaDetailPage() {
             >
               Add +
             </Button>
-          </Box>
+          </div>
 
           {(expenses[cat.id] || []).map((exp, i) => (
-            <Box key={i} ml={2}>
+            <div key={i} className="ml-2 mt-2 text-sm text-muted-foreground">
               {exp.name} - {exp.amount} - {exp.date}
-            </Box>
+            </div>
           ))}
-        </Box>
+        </div>
       ))}
 
-      <Button
-        variant="contained"
-        fullWidth
-        onClick={() => mutation.mutate()}
-        disabled={mutation.isPending}
-      >
+      <Button className="w-full" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
         Submit All
       </Button>
 
@@ -154,36 +145,37 @@ export default function JVExpenseMoaDetailPage() {
         open={open}
         onClose={() => setOpen(false)}
         title={`Add Expense (${selectedCategory?.name || ''})`}
-        actions={
-          <Button onClick={addExpense} variant="contained">
-            Save
-          </Button>
-        }
+        actions={<Button onClick={addExpense}>Save</Button>}
       >
-        <TextField
-          label="Expense Name"
-          fullWidth
-          sx={{ mb: 2 }}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="expense-name" className="text-sm font-medium">
+              Expense Name
+            </label>
+            <Input id="expense-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="h-10" />
+          </div>
 
-        <TextField
-          label="Amount"
-          type="number"
-          fullWidth
-          sx={{ mb: 2 }}
-          value={form.amount}
-          onChange={(e) => setForm({ ...form, amount: e.target.value })}
-        />
+          <div className="space-y-2">
+            <label htmlFor="expense-amount" className="text-sm font-medium">
+              Amount
+            </label>
+            <Input
+              id="expense-amount"
+              type="number"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              className="h-10"
+            />
+          </div>
 
-        <TextField
-          type="date"
-          fullWidth
-          value={form.date}
-          onChange={(e) => setForm({ ...form, date: e.target.value })}
-        />
+          <div className="space-y-2">
+            <label htmlFor="expense-date" className="text-sm font-medium">
+              Date
+            </label>
+            <Input id="expense-date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="h-10" />
+          </div>
+        </div>
       </AppModal>
-    </Box>
+    </div>
   );
 }

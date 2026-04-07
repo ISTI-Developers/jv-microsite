@@ -40,12 +40,12 @@ function TableSkeleton() {
   );
 }
 
-export default function DashboardPage() {
+export default function SitePage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Overview and analytics</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Site</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Joint Venture - Site Management</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-12">

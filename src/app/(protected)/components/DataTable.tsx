@@ -1,18 +1,8 @@
 'use client';
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TableContainer,
-  Paper,
-  TablePagination,
-  Box,
-  Skeleton,
-} from '@mui/material';
 import { ReactNode, useMemo, useState } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 export type Column<T> = {
   header: string;
@@ -26,12 +16,9 @@ type DataTableProps<T> = {
   rows: T[];
   columns: Column<T>[];
   getRowKey: (row: T) => string | number;
-
   loading?: boolean;
-
-  onRowClick?: (row: T) => void;
+  onRowClick?: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => void;
   isRowSelectable?: (row: T) => boolean;
-
   pagination?: boolean;
   paginationMode?: PaginationMode;
   totalRows?: number;
@@ -60,9 +47,7 @@ export default function DataTable<T>({
   const [internalRowsPerPage, setInternalRowsPerPage] = useState(10);
 
   const page = paginationMode === 'backend' ? (controlledPage ?? 0) : internalPage;
-
-  const rowsPerPage =
-    paginationMode === 'backend' ? (controlledRowsPerPage ?? 10) : internalRowsPerPage;
+  const rowsPerPage = paginationMode === 'backend' ? (controlledRowsPerPage ?? 10) : internalRowsPerPage;
 
   const paginatedRows = useMemo(() => {
     if (!pagination || paginationMode === 'backend') return rows;
@@ -71,7 +56,7 @@ export default function DataTable<T>({
     return rows.slice(start, start + rowsPerPage);
   }, [rows, page, rowsPerPage, pagination, paginationMode]);
 
-  const handlePageChange = (_: unknown, newPage: number) => {
+  const handlePageChange = (newPage: number) => {
     if (paginationMode === 'backend') {
       onPageChange?.(newPage);
     } else {
@@ -79,9 +64,7 @@ export default function DataTable<T>({
     }
   };
 
-  const handleRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(event.target.value, 10);
-
+  const handleRowsPerPageChange = (value: number) => {
     if (paginationMode === 'backend') {
       onRowsPerPageChange?.(value);
     } else {
@@ -91,158 +74,121 @@ export default function DataTable<T>({
   };
 
   const skeletonRows = Array.from({ length: rowsPerPage });
+  const totalCount = paginationMode === 'backend' ? (totalRows ?? 0) : rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / rowsPerPage));
+  const rangeStart = totalCount === 0 ? 0 : page * rowsPerPage + 1;
+  const rangeEnd = totalCount === 0 ? 0 : Math.min(totalCount, (page + 1) * rowsPerPage);
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        borderRadius: 3,
-        border: '1px solid',
-        borderColor: 'divider',
-        overflow: 'hidden',
-        backgroundColor: 'background.paper',
-      }}
-    >
-      <TableContainer
-        sx={{
-          overflowX: 'auto',
-          maxWidth: '100%',
-        }}
-      >
-        <Table
-          size="small"
-          stickyHeader
-          sx={{
-            minWidth: 1800,
-          }}
-        >
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'grey.50' }}>
-              <TableCell
-                sx={{
-                  fontWeight: 600,
-                  fontSize: 13,
-                  color: 'text.secondary',
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  py: 1.5,
-                  width: 60,
-                  whiteSpace: 'nowrap',
-                }}
+    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <Table className="min-w-full">
+        <TableHeader className="bg-muted/50">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="w-14 px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground">#</TableHead>
+            {columns.map((col, index) => (
+              <TableHead
+                key={index}
+                className={cn(
+                  'px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground',
+                  col.align === 'right' && 'text-right',
+                  col.align === 'center' && 'text-center'
+                )}
               >
-                #
-              </TableCell>
+                {col.header}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
 
-              {columns.map((col, index) => (
-                <TableCell
-                  key={index}
-                  align={col.align ?? 'left'}
-                  sx={{
-                    fontWeight: 600,
-                    fontSize: 13,
-                    color: 'text.secondary',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    py: 1.5,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {col.header}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-
-          <TableBody>
-            {loading
-              ? skeletonRows.map((_, rowIndex) => (
-                  <TableRow key={`skeleton-${rowIndex}`}>
-                    <TableCell>
-                      <Skeleton height={20} />
+        <TableBody>
+          {loading
+            ? skeletonRows.map((_, rowIndex) => (
+                <TableRow key={`skeleton-${rowIndex}`} className="hover:bg-transparent">
+                  <TableCell className="px-4 py-3">
+                    <div className="h-4 w-6 animate-pulse rounded bg-muted" />
+                  </TableCell>
+                  {columns.map((_, colIndex) => (
+                    <TableCell key={colIndex} className="px-4 py-3">
+                      <div className="h-4 w-full max-w-[12rem] animate-pulse rounded bg-muted" />
                     </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            : paginatedRows.map((row, rowIndex) => {
+                const rowNumber = page * rowsPerPage + rowIndex + 1;
+                const clickable = Boolean(onRowClick && (!isRowSelectable || isRowSelectable(row)));
 
-                    {columns.map((_, colIndex) => (
-                      <TableCell key={colIndex}>
-                        <Skeleton height={20} />
+                return (
+                  <TableRow
+                    key={getRowKey(row)}
+                    onClick={clickable ? (event) => onRowClick?.(row, event) : undefined}
+                    className={cn('border-border', clickable && 'cursor-pointer hover:bg-primary/5')}
+                  >
+                    <TableCell className="px-4 py-3 font-medium text-muted-foreground">{rowNumber}</TableCell>
+                    {columns.map((col, index) => (
+                      <TableCell
+                        key={index}
+                        className={cn(
+                          'px-4 py-3 text-sm text-foreground',
+                          col.align === 'right' && 'text-right',
+                          col.align === 'center' && 'text-center'
+                        )}
+                      >
+                        {col.render(row)}
                       </TableCell>
                     ))}
                   </TableRow>
-                ))
-              : paginatedRows.map((row, rowIndex) => {
-                  const rowNumber =
-                    paginationMode === 'backend'
-                      ? page * rowsPerPage + rowIndex + 1
-                      : page * rowsPerPage + rowIndex + 1;
-
-                  return (
-                    <TableRow
-                      key={getRowKey(row)}
-                      hover
-                      onClick={
-                        onRowClick && (!isRowSelectable || isRowSelectable(row))
-                          ? () => onRowClick(row)
-                          : undefined
-                      }
-                      sx={{
-                        cursor: onRowClick ? 'pointer' : 'default',
-                        transition: 'all 0.15s ease',
-                        '&:hover': {
-                          backgroundColor: 'rgba(37, 99, 235, 0.04)',
-                        },
-                        '&:not(:last-child) td': {
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                        },
-                      }}
-                    >
-                      <TableCell
-                        sx={{
-                          fontWeight: 500,
-                          color: 'text.secondary',
-                          width: 60,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {rowNumber}
-                      </TableCell>
-
-                      {columns.map((col, index) => (
-                        <TableCell
-                          key={index}
-                          align={col.align ?? 'left'}
-                          sx={{
-                            fontSize: 14,
-                            py: 1.5,
-                            color: 'text.primary',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {col.render(row)}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  );
-                })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                );
+              })}
+        </TableBody>
+      </Table>
 
       {pagination && !loading && (
-        <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-          <TablePagination
-            component="div"
-            count={paginationMode === 'backend' ? (totalRows ?? 0) : rows.length}
-            page={page}
-            onPageChange={handlePageChange}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleRowsPerPageChange}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            sx={{
-              '.MuiTablePagination-toolbar': { px: 2 },
-            }}
-          />
-        </Box>
+        <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            Showing {rangeStart}-{rangeEnd} of {totalCount}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2">
+              <span>Rows</span>
+              <select
+                value={rowsPerPage}
+                onChange={(event) => handleRowsPerPageChange(Number(event.target.value))}
+                className="h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground"
+              >
+                {[5, 10, 25, 50].map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(Math.max(0, page - 1))}
+                disabled={page === 0}
+                className="rounded-lg border border-input px-3 py-1.5 text-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span>
+                Page {Math.min(page + 1, totalPages)} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
+                disabled={page >= totalPages - 1}
+                className="rounded-lg border border-input px-3 py-1.5 text-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </Paper>
+    </div>
   );
 }
