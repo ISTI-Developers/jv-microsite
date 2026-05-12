@@ -1,25 +1,23 @@
-// src/components/Sidebar.tsx
 'use client';
 
 import Link from 'next/link';
-import {
-  Box,
-  Drawer,
-  List,
-  ListItemButton,
-  ListItemText,
-  Typography,
-  Divider,
-  IconButton,
-} from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-import { useState, useMemo } from 'react';
+import { Menu, X } from 'lucide-react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import ChangePasswordModal from './ChangePasswordModal';
-import { Roles } from '@/constants/roles';
 import UserProfileModal from '../users/UserProfileModal';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api';
 
 export const SIDEBAR_WIDTH = 260;
+
+type NavItem = {
+  id: number;
+  label: string;
+  path: string;
+};
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
@@ -34,146 +32,111 @@ export default function Sidebar() {
   const profileModalOpen = !forced && (forcedProfile || changeOpenProfile);
   const blocking = forced || forcedProfile;
 
-  const navItems = useMemo(() => {
-    if (!user) return [];
+  const { data: navItems = [] } = useQuery<NavItem[]>({
+    queryKey: ['navigation'],
+    queryFn: async () => {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/navigation`);
+      const data = await res.json();
 
-    switch (user.role_id) {
-      case Roles.SUPER_USER:
-        return [
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Users', href: '/users' },
-          { label: 'Expenses', href: '/expense' },
-          { label: 'Revenues', href: '/revenue' },
-        ];
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch navigation');
+      }
 
-      case Roles.ADMIN:
-        return [
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Users', href: '/users' },
-          { label: 'Expenses', href: '/expense' },
-          { label: 'Revenues', href: '/revenue' },
-          { label: 'MOAs', href: '/expense-moas' },
-        ];
-      case Roles.JOINT_VENTURE:
-        return [
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Expenses', href: '/expense' },
-          { label: 'Revenues', href: '/revenue' },
-          { label: 'MOAs', href: '/jv/expense-moas' },
-        ];
-
-      default:
-        return [{ label: 'Dashboard', href: '/dashboard' }];
-    }
-  }, [user]);
+      return data.data;
+    },
+    enabled: !!user,
+  });
+  console.log(navItems);
 
   const content = (
-    <Box
-      sx={{
-        width: SIDEBAR_WIDTH,
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Box p={3}>
-        <Typography variant="h6" fontWeight={600}>
-          JV Microsite
-        </Typography>
-      </Box>
+    <div className="flex h-full flex-col">
+      <div className="border-b border-border px-5 py-5">
+        <p className="text-lg font-semibold tracking-tight text-foreground">JV Microsite</p>
+      </div>
 
-      <Divider />
-
-      <List sx={{ flexGrow: 1 }}>
+      <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map((item) => (
-          <ListItemButton key={item.href} component={Link} href={item.href}>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
-        ))}
-      </List>
-
-      <Divider />
-
-      <Box p={2}>
-        <Typography variant="body2" color="text.secondary">
-          {user?.email || 'user@email.com'}
-        </Typography>
-
-        {!forcedProfile && (
-          <ListItemButton
-            sx={{ mt: 1, borderRadius: 1 }}
-            onClick={() => setChangeOpenProfile(true)}
+          <Link
+            key={item.id}
+            href={item.path}
+            onClick={() => setOpen(false)}
+            className="block rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
           >
-            <ListItemText primary="Update Profile" />
-          </ListItemButton>
-        )}
-        {!forced && (
-          <ListItemButton sx={{ mt: 1, borderRadius: 1 }} onClick={() => setChangeOpen(true)}>
-            <ListItemText primary="Change Password" />
-          </ListItemButton>
-        )}
+            {item.label}
+          </Link>
+        ))}
+      </nav>
 
-        <ListItemButton
-          onClick={blocking ? undefined : logout}
-          sx={{
-            mt: 1,
-            borderRadius: 1,
-            opacity: blocking ? 0.5 : 1,
-            pointerEvents: blocking ? 'none' : 'auto',
-          }}
-        >
-          <ListItemText primary="Logout" />
-        </ListItemButton>
-      </Box>
+      <div className="border-t border-border px-3 py-4">
+        <p className="px-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">Account</p>
+        <p className="px-3 pt-2 text-sm text-foreground">{user?.email || 'user@email.com'}</p>
 
-      <ChangePasswordModal
-        open={passwordModalOpen}
-        onClose={forced ? () => {} : () => setChangeOpen(false)}
-        forced={forced}
-      />
+        <div className="mt-3 space-y-1">
+          {!forcedProfile && (
+            <button
+              type="button"
+              className="w-full rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-muted"
+              onClick={() => setChangeOpenProfile(true)}
+            >
+              Update Profile
+            </button>
+          )}
 
-      <UserProfileModal
-        open={profileModalOpen}
-        user={user}
-        onClose={forcedProfile ? () => {} : () => setChangeOpenProfile(false)}
-      />
-    </Box>
+          {!forced && (
+            <button
+              type="button"
+              className="w-full rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-muted"
+              onClick={() => setChangeOpen(true)}
+            >
+              Change Password
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={blocking ? undefined : logout}
+            className={cn(
+              'w-full rounded-xl px-3 py-2 text-left text-sm transition',
+              blocking ? 'pointer-events-none opacity-50' : 'text-destructive hover:bg-destructive/10'
+            )}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <ChangePasswordModal open={passwordModalOpen} onClose={forced ? () => {} : () => setChangeOpen(false)} forced={forced} />
+
+      <UserProfileModal open={profileModalOpen} user={user} onClose={forcedProfile ? () => {} : () => setChangeOpenProfile(false)} />
+    </div>
   );
 
   return (
     <>
-      <IconButton
-        onClick={() => setOpen(true)}
-        sx={{
-          display: { md: 'none' },
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          zIndex: 1300,
-        }}
-      >
-        <MenuIcon />
-      </IconButton>
+      <Button type="button" variant="outline" size="icon" onClick={() => setOpen(true)} className="fixed top-4 left-4 z-40 md:hidden">
+        <Menu className="size-4" />
+        <span className="sr-only">Open navigation</span>
+      </Button>
 
-      <Drawer open={open} onClose={() => setOpen(false)} sx={{ display: { md: 'none' } }}>
+      {open && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button type="button" className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-label="Close navigation" />
+
+          <div className="absolute inset-y-0 left-0 border-r border-border bg-card shadow-xl" style={{ width: SIDEBAR_WIDTH }}>
+            <div className="flex justify-end p-3">
+              <Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)}>
+                <X className="size-4" />
+                <span className="sr-only">Close navigation</span>
+              </Button>
+            </div>
+            {content}
+          </div>
+        </div>
+      )}
+
+      <aside className="fixed inset-y-0 left-0 z-30 hidden border-r border-border bg-card md:block" style={{ width: SIDEBAR_WIDTH }}>
         {content}
-      </Drawer>
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: SIDEBAR_WIDTH,
-          height: '100vh',
-          display: { xs: 'none', md: 'block' },
-          borderRight: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'background.paper',
-          zIndex: 1200,
-        }}
-      >
-        {content}
-      </Box>
+      </aside>
     </>
   );
 }

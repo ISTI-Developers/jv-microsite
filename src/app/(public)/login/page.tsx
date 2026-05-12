@@ -1,29 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState, type SubmitEventHandler } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Checkbox,
-  Divider,
-  FormControlLabel,
-  IconButton,
-  InputAdornment,
-  Link,
-  TextField,
-  Typography,
-  CircularProgress,
-  Stack,
-} from '@mui/material';
-import VisibilityRounded from '@mui/icons-material/VisibilityRounded';
-import VisibilityOffRounded from '@mui/icons-material/VisibilityOffRounded';
+import Link from 'next/link';
+import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,10 +16,8 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,206 +67,97 @@ export default function LoginPage() {
   if (isLoading) return null;
 
   return (
-    <Box
-      sx={{
-        minHeight: '100dvh',
-        display: 'grid',
-        placeItems: 'center',
-        px: { xs: 2, sm: 3 },
-        position: 'relative',
-        overflow: 'hidden',
+    <div className="relative grid min-h-dvh place-items-center overflow-hidden bg-[linear-gradient(135deg,#f8fafc_0%,#eef2ff_100%)] px-4 py-10">
+      <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
+      <div className="absolute -right-24 -bottom-28 h-80 w-80 rounded-full bg-indigo-500/20 blur-3xl" />
 
-        background: `
-      radial-gradient(circle at 15% 20%, rgba(59,130,246,0.15), transparent 40%),
-      radial-gradient(circle at 85% 80%, rgba(99,102,241,0.18), transparent 40%),
-      linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)
-    `,
-      }}
-    >
-      {/* 🔥 Glow Shape 1 */}
-      <Box
-        sx={{
-          position: 'absolute',
-          width: 320,
-          height: 320,
-          borderRadius: '50%',
-          background: 'rgba(37,99,235,0.18)',
-          filter: 'blur(120px)',
-          top: -120,
-          left: -120,
-          zIndex: 0,
-        }}
-      />
+      <div className="relative z-10 w-full max-w-[460px] rounded-3xl border border-white/70 bg-white/85 p-6 shadow-2xl backdrop-blur sm:p-8">
+        <div className="mb-6 flex flex-col items-center gap-4">
+          <div className="grid h-[72px] w-[72px] place-items-center rounded-2xl bg-white shadow-lg shadow-slate-900/10">
+            <Image src="/icon.png" alt="JV Microsite" width={48} height={48} style={{ objectFit: 'contain' }} priority />
+          </div>
 
-      {/* 🔥 Glow Shape 2 */}
-      <Box
-        sx={{
-          position: 'absolute',
-          width: 320,
-          height: 320,
-          borderRadius: '50%',
-          background: 'rgba(99,102,241,0.18)',
-          filter: 'blur(120px)',
-          bottom: -140,
-          right: -120,
-          zIndex: 0,
-        }}
-      />
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950">JV Microsite</h1>
+            <p className="mt-1 text-sm text-slate-500">Sign in to continue</p>
+          </div>
+        </div>
 
-      <Card
-        elevation={4}
-        sx={{
-          width: '100%',
-          maxWidth: 460,
-          borderRadius: 3,
-          backdropFilter: 'blur(6px)',
-          backgroundColor: 'rgba(255,255,255,0.85)',
-          zIndex: 1,
-        }}
-      >
-        <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-          <Stack alignItems="center" spacing={1.75} mb={3}>
-            <Box
-              sx={{
-                width: 72,
-                height: 72,
-                borderRadius: 2,
-                display: 'grid',
-                placeItems: 'center',
-                bgcolor: 'background.paper',
-                boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-              }}
-            >
-              <Image
-                src="/icon.png"
-                alt="JV Microsite"
-                width={48}
-                height={48}
-                style={{ objectFit: 'contain' }}
-                priority
-              />
-            </Box>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-            <Box textAlign="center">
-              <Typography
-                variant="h5"
-                sx={{
-                  fontWeight: 700,
-                  letterSpacing: -0.4,
-                }}
-              >
-                JV Microsite
-              </Typography>
-
-              <Typography variant="body2" color="text.secondary" mt={0.25}>
-                Sign in to continue
-              </Typography>
-            </Box>
-          </Stack>
-
-          <Box
-            component="form"
-            onSubmit={handleSubmit}
-            display="flex"
-            flexDirection="column"
-            gap={2}
-          >
-            {error && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {error}
-              </Alert>
-            )}
-
-            <TextField
-              label="Email"
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-medium text-slate-700">
+              Email
+            </label>
+            <Input
+              id="email"
               type="email"
-              fullWidth
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="h-11 rounded-xl border-slate-200 bg-white px-3"
             />
+          </div>
 
-            <TextField
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
-              fullWidth
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword((v) => !v)} edge="end">
-                      {showPassword ? <VisibilityOffRounded /> : <VisibilityRounded />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    sx={{
-                      '&.Mui-checked': {
-                        color: 'primary.main',
-                      },
-                    }}
-                  />
-                }
-                label={<Typography variant="body2">Remember me</Typography>}
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium text-slate-700">
+              Password
+            </label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="h-11 rounded-xl border-slate-200 bg-white px-3 pr-11"
               />
-
-              <Link
-                href="/forgot-password"
-                underline="hover"
-                sx={{
-                  fontWeight: 500,
-                  color: 'primary.main',
-                }}
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 transition hover:text-slate-900"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                Forgot password?
-              </Link>
-            </Box>
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </div>
 
-            <Button
-              type="submit"
-              size="large"
-              disabled={!canSubmit}
-              sx={{
-                py: 1.3,
-                fontWeight: 700,
-                bgcolor: 'primary.main',
-                '&:hover': {
-                  bgcolor: '#1E4ED8',
-                },
-              }}
-            >
-              {loading ? (
-                <Box display="flex" alignItems="center" gap={1}>
-                  <CircularProgress size={18} thickness={5} sx={{ color: '#fff' }} />
-                  Signing in…
-                </Box>
-              ) : (
-                <Typography variant="button" color="#fff">
-                  Sign In
-                </Typography>
-              )}
-            </Button>
+          <div className="flex items-center justify-between gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600"
+              />
+              Remember me
+            </label>
 
-            <Divider sx={{ my: 0.5 }} />
+            <Link href="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+              Forgot password?
+            </Link>
+          </div>
 
-            <Typography variant="caption" textAlign="center" color="text.secondary">
-              By continuing, you agree to the company policies and acceptable use.
-            </Typography>
-          </Box>
-        </CardContent>
-      </Card>
-    </Box>
+          <Button type="submit" size="lg" disabled={!canSubmit} className="h-11 w-full rounded-xl">
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <LoaderCircle className="size-4 animate-spin" />
+                Signing in...
+              </span>
+            ) : (
+              'Sign In'
+            )}
+          </Button>
+
+          <div className="border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
+            By continuing, you agree to the company policies and acceptable use.
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

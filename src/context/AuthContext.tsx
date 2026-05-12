@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { User } from '@/app/(protected)/users/users.type';
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     const session = localStorage.getItem('session');
 
     if (!session) {
@@ -48,16 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setIsAuthenticated(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     (async () => {
       await refreshUser();
       setIsLoading(false);
     })();
-  }, []);
+  }, [refreshUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
         method: 'POST',
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(false);
       router.replace('/login');
     }
-  };
+  }, [router]);
   return (
     <AuthContext.Provider
       value={{

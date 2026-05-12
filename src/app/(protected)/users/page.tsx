@@ -1,31 +1,19 @@
 // src/app/(private)/users/page.tsx
 'use client';
 
-import { ROLE_LABELS, Roles } from '@/constants/roles';
-import { ACTIVE_STATUS_CONFIG, FORCE_PASSWORD_CHANGE_CONFIG } from '@/constants/userStatus';
+import { Roles } from '@/constants/roles';
 import { apiFetch } from '@/lib/api';
-import {
-  Box,
-  Typography,
-  Button,
-  Chip,
-  CircularProgress,
-  TextField,
-  IconButton,
-  Tooltip,
-  MenuItem,
-} from '@mui/material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import ToggleOnIcon from '@mui/icons-material/ToggleOn';
-import ToggleOffIcon from '@mui/icons-material/ToggleOff';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Users } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { User } from './users.type';
-import DataTable, { Column } from '../components/DataTable';
+import DataTable from '../components/DataTable';
 import UserProfileModal from './UserProfileModal';
 import AppModal from '../components/AppModal';
-
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { createUserColumns } from './columns';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 export default function UsersPage() {
   const queryClient = useQueryClient();
 
@@ -33,7 +21,10 @@ export default function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [inviteRole, setInviteRole] = useState<number>(Roles.JOINT_VENTURE);
-
+  const roleItems = [
+    { label: 'Admin', value: String(Roles.ADMIN) },
+    { label: 'Joint Venture', value: String(Roles.JOINT_VENTURE) },
+  ];
   const {
     data: users,
     isLoading,
@@ -43,12 +34,15 @@ export default function UsersPage() {
     queryFn: async () => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users`);
       const data = await res.json();
+
       if (!res.ok) {
         throw new Error(data.error || 'Failed to fetch users');
       }
+
       return data.users;
     },
   });
+
   const resetMutation = useMutation({
     mutationFn: async (userId: number) => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/reset-password`, {
@@ -67,15 +61,12 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       alert('Temporary password sent.');
     },
-    onError: (error) => {
-      if (error instanceof Error) alert(error.message);
+    onError: (mutationError) => {
+      if (mutationError instanceof Error) alert(mutationError.message);
       else alert('Something went wrong');
     },
   });
-  const handleReset = (userId: number) => {
-    if (!confirm('Reset password for this user?')) return;
-    resetMutation.mutate(userId);
-  };
+
   const inviteMutation = useMutation({
     mutationFn: async ({ email, role_id }: { email: string; role_id: number }) => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/invite`, {
@@ -96,11 +87,12 @@ export default function UsersPage() {
       setOpenInvite(false);
       setInviteEmail('');
     },
-    onError: (error) => {
-      if (error instanceof Error) alert(error.message);
+    onError: (mutationError) => {
+      if (mutationError instanceof Error) alert(mutationError.message);
       else alert('Something went wrong');
     },
   });
+
   const toggleMutation = useMutation({
     mutationFn: ({ userId, status }: { userId: number; status: 0 | 1 }) =>
       apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/toggle-status`, {
@@ -114,164 +106,114 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
+
+  const handleReset = (userId: number) => {
+    if (!confirm('Reset password for this user?')) return;
+    resetMutation.mutate(userId);
+  };
+
   const handleInvite = () => {
     if (!inviteEmail.trim()) {
       alert('Email is required');
       return;
     }
+
     inviteMutation.mutate({
       email: inviteEmail.trim().toLowerCase(),
       role_id: inviteRole,
     });
   };
+
   if (isLoading) {
-    return (
-      <Box p={3}>
-        <CircularProgress />
-      </Box>
-    );
+    return <div className="p-3 text-sm text-muted-foreground">Loading users...</div>;
   }
+
   if (error instanceof Error) {
-    return (
-      <Box p={3}>
-        <Typography color="error">{error.message}</Typography>
-      </Box>
-    );
+    return <div className="p-3 text-sm text-red-600">{error.message}</div>;
   }
-  const columns: Column<User>[] = [
-    {
-      header: 'Email',
-      render: (user) => user.email,
-    },
-    {
-      header: 'First Name',
-      render: (user) => user.profile?.first_name ?? '—',
-    },
-    {
-      header: 'Last Name',
-      render: (user) => user.profile?.last_name ?? '—',
-    },
-    {
-      header: 'Role',
-      render: (user) => <Chip size="small" label={ROLE_LABELS[user.role_id] ?? '—'} />,
-    },
-    {
-      header: 'Active',
-      render: (user) => {
-        const active = ACTIVE_STATUS_CONFIG[user.is_active ? 1 : 0];
-        return <Chip size="small" label={active.label} color={active.color} />;
-      },
-    },
-    {
-      header: 'Force Change Password',
-      render: (user) => {
-        const force = FORCE_PASSWORD_CHANGE_CONFIG[user.force_password_change ? 1 : 0];
-        return <Chip size="small" label={force.label} color={force.color} />;
-      },
-    },
-    {
-      header: 'Last Login',
-      render: (user) =>
-        user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never',
-    },
-    {
-      header: 'Actions',
-      align: 'right',
-      render: (user) => {
-        const isActive = user.is_active === 1;
-        return (
-          <Box display="flex" gap={1} justifyContent="flex-end">
-            <Tooltip title="View Profile">
-              <IconButton size="small" onClick={() => setSelectedUser(user)}>
-                <VisibilityIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
 
-            <Tooltip title="Reset Password">
-              <IconButton
-                size="small"
-                onClick={() => handleReset(user.id)}
-                disabled={resetMutation.isPending}
-              >
-                <RestartAltIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-
-            <Tooltip title={isActive ? 'Deactivate User' : 'Activate User'}>
-              <IconButton
-                size="small"
-                color={isActive ? 'success' : 'error'}
-                onClick={() =>
-                  toggleMutation.mutate({
-                    userId: user.id,
-                    status: isActive ? 0 : 1,
-                  })
-                }
-                disabled={toggleMutation.isPending}
-              >
-                {isActive ? <ToggleOnIcon fontSize="small" /> : <ToggleOffIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          </Box>
-        );
-      },
-    },
-  ];
+  const columns = createUserColumns({
+    setSelectedUser,
+    handleReset,
+    resetPending: resetMutation.isPending,
+    togglePending: toggleMutation.isPending,
+    toggleStatus: toggleMutation.mutate,
+  });
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" mb={4}>
-        <Typography variant="h4" fontWeight={600}>
-          Users
-        </Typography>
-        <Button variant="contained" onClick={() => setOpenInvite(true)}>
-          Invite User
-        </Button>
-      </Box>
+    <div>
+      <div className="mb-6 flex flex-col gap-3 rounded-3xl border border-border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
+            <Users className="h-7 w-7 text-muted-foreground" />
+          </div>
+
+          <div className="space-y-1">
+            <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
+            <p className="text-sm text-muted-foreground">Manage users and invitations</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOpenInvite(true)}>
+            Invite User
+          </Button>
+        </div>
+      </div>
 
       <DataTable rows={users ?? []} columns={columns} getRowKey={(row) => row.id} />
-      <UserProfileModal
-        key={selectedUser?.id ?? 'none'}
-        open={!!selectedUser}
-        user={selectedUser}
-        onClose={() => setSelectedUser(null)}
-      />
+
+      <UserProfileModal key={selectedUser?.id ?? 'none'} open={!!selectedUser} user={selectedUser} onClose={() => setSelectedUser(null)} />
 
       <AppModal
         open={openInvite}
         onClose={() => setOpenInvite(false)}
         title="Invite User"
-        maxWidth="xs"
-        actions={
+        maxWidth="sm"
+        footer={
           <>
-            <Button onClick={() => setOpenInvite(false)}>Cancel</Button>
-            <Button variant="contained" onClick={handleInvite} disabled={inviteMutation.isPending}>
+            <Button variant="outline" onClick={() => setOpenInvite(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleInvite} disabled={inviteMutation.isPending}>
               Send Invite
             </Button>
           </>
         }
       >
-        <Box display="flex" flexDirection="column" gap={2} mt={1}>
-          <TextField
-            label="Email"
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            fullWidth
-          />
+        <div className="flex flex-col gap-4 pt-1">
+          <div className="space-y-2">
+            <label htmlFor="invite-email" className="text-sm font-medium">
+              Email
+            </label>
+            <Input id="invite-email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="h-10" />
+          </div>
 
-          <TextField
-            select
-            label="Role"
-            value={inviteRole}
-            onChange={(e) => setInviteRole(Number(e.target.value))}
-            fullWidth
-          >
-            <MenuItem value={Roles.ADMIN}>Admin</MenuItem>
-            <MenuItem value={Roles.JOINT_VENTURE}>Joint Venture</MenuItem>
-          </TextField>
-        </Box>
+          <div className="space-y-2">
+            <label htmlFor="invite-role" className="text-sm font-medium">
+              Role
+            </label>
+
+            <Select value={String(inviteRole)} onValueChange={(value) => setInviteRole(Number(value))}>
+              <SelectTrigger id="invite-role" className="h-10 w-full rounded-lg">
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Roles</SelectLabel>
+
+                  {roleItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </AppModal>
-    </Box>
+    </div>
   );
 }

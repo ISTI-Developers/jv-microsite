@@ -1,97 +1,36 @@
 'use client';
 
-import { Box, Grid, Paper, Typography, Skeleton, Divider } from '@mui/material';
-
-function StatCardSkeleton() {
-  return (
-    <Paper sx={{ p: 3 }}>
-      <Skeleton variant="text" width="40%" height={28} />
-      <Skeleton variant="text" width="60%" height={40} sx={{ mt: 1 }} />
-      <Skeleton variant="rectangular" height={6} sx={{ mt: 2, borderRadius: 1 }} />
-    </Paper>
-  );
-}
-
-function ChartCardSkeleton({
-  titleWidth = '30%',
-  height = 260,
-}: {
-  titleWidth?: string | number;
-  height?: number;
-}) {
-  return (
-    <Paper sx={{ p: 3, height: '100%' }}>
-      <Skeleton variant="text" width={titleWidth} height={28} />
-      <Divider sx={{ my: 2 }} />
-      <Skeleton variant="rectangular" height={height} sx={{ borderRadius: 2 }} />
-    </Paper>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <Paper sx={{ p: 3 }}>
-      <Skeleton variant="text" width="35%" height={28} />
-      <Divider sx={{ my: 2 }} />
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Box
-          key={i}
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            mb: 2,
-          }}
-        >
-          <Skeleton variant="text" width="25%" />
-          <Skeleton variant="text" width="15%" />
-          <Skeleton variant="text" width="20%" />
-        </Box>
-      ))}
-    </Paper>
-  );
-}
+import { LayoutDashboard } from 'lucide-react';
 
 export default function DashboardPage() {
   return (
-    <Box>
-      {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight={600}>
-          Dashboard
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Overview and analytics
-        </Typography>
-      </Box>
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-background via-card to-muted/40 p-8 shadow-sm">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="mb-4 inline-flex rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              Coming soon
+            </div>
 
-      <Grid container spacing={3}>
-        {Array.from({ length: 4 }).map((_, index) => (
-          <Grid key={index} size={{ xs: 12, sm: 6, md: 3 }}>
-            <StatCardSkeleton />
-          </Grid>
-        ))}
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
+              <LayoutDashboard className="h-7 w-7 text-muted-foreground" />
+            </div>
 
-        {/* Main Charts */}
-        <Grid size={{ xs: 12, md: 8 }}>
-          <ChartCardSkeleton titleWidth="25%" height={320} />
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <ChartCardSkeleton titleWidth="50%" height={320} />
-        </Grid>
+            <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
 
-        {/* Secondary Charts */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <ChartCardSkeleton titleWidth="40%" height={260} />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <ChartCardSkeleton titleWidth="35%" height={260} />
-        </Grid>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              The dashboard is currently under development. Analytics, summaries, report widgets, and performance insights will be available here
+              soon.
+            </p>
+          </div>
 
-        {/* Table Placeholder */}
-        <Grid size={{ xs: 12 }}>
-          <TableSkeleton />
-        </Grid>
-      </Grid>
-    </Box>
+          <div className="min-w-[220px] rounded-3xl border border-dashed border-border bg-background/70 p-6 text-center">
+            <p className="text-sm font-medium text-muted-foreground">Module Status</p>
+            <p className="mt-2 text-2xl font-semibold tracking-tight">In Progress</p>
+            <p className="mt-2 text-xs text-muted-foreground">Preparing dashboard tools</p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

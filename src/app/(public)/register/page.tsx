@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper } from '@mui/material';
+import { LoaderCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -42,63 +44,49 @@ export default function RegisterPage() {
   };
 
   return (
-    <Box
-      minHeight="100vh"
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      sx={{ bgcolor: 'background.default' }}
-    >
-      <Paper
-        elevation={3}
-        sx={{
-          width: 380,
-          p: 4,
-          borderRadius: 2,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 3,
-        }}
-      >
-        <Box textAlign="center">
-          <Typography variant="h5" fontWeight={600}>
-            Create account
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            JV Microsite
-          </Typography>
-        </Box>
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
+          <p className="mt-1 text-sm text-muted-foreground">JV Microsite</p>
+        </div>
 
-        <Box component="form" onSubmit={handleSubmit} display="flex" flexDirection="column" gap={2}>
-          <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            fullWidth
-          />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="register-email" className="text-sm font-medium">
+              Email
+            </label>
+            <Input id="register-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11 rounded-xl" />
+          </div>
 
-          <TextField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            fullWidth
-          />
+          <div className="space-y-2">
+            <label htmlFor="register-password" className="text-sm font-medium">
+              Password
+            </label>
+            <Input
+              id="register-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="h-11 rounded-xl"
+            />
+          </div>
 
-          <Button type="submit" variant="contained" size="large" disabled={loading} fullWidth>
-            {loading ? 'Creating account…' : 'Register'}
+          <Button type="submit" size="lg" disabled={loading} className="h-11 w-full rounded-xl">
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <LoaderCircle className="size-4 animate-spin" />
+                Creating account...
+              </span>
+            ) : (
+              'Register'
+            )}
           </Button>
-        </Box>
+        </form>
 
-        {message && (
-          <Typography variant="body2" textAlign="center" color="text.secondary">
-            {message}
-          </Typography>
-        )}
-      </Paper>
-    </Box>
+        {message && <p className="mt-4 text-center text-sm text-muted-foreground">{message}</p>}
+      </div>
+    </div>
   );
 }

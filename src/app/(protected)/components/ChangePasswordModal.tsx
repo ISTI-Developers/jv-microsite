@@ -1,18 +1,11 @@
 // components/ChangePasswordModal.tsx
 'use client';
 
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Stack,
-  Alert,
-} from '@mui/material';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import AppModal from './AppModal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 type Props = {
   open: boolean;
@@ -50,17 +43,15 @@ export default function ChangePasswordModal({ open, onClose, forced = false }: P
       } catch {
         data = null;
       }
+
       if (!res.ok) {
-        if (
-          data &&
-          typeof data === 'object' &&
-          'error' in data &&
-          typeof (data as { error: string }).error === 'string'
-        ) {
+        if (data && typeof data === 'object' && 'error' in data && typeof (data as { error: string }).error === 'string') {
           throw new Error((data as { error: string }).error);
         }
+
         throw new Error('Failed');
       }
+
       logout();
     } catch (err) {
       if (err instanceof Error) {
@@ -74,45 +65,48 @@ export default function ChangePasswordModal({ open, onClose, forced = false }: P
   };
 
   return (
-    <Dialog
+    <AppModal
       open={open}
-      onClose={forced ? undefined : onClose}
-      fullWidth
-      maxWidth="xs"
-      disableEscapeKeyDown={forced}
+      onClose={forced ? () => {} : onClose}
+      hideCloseButton={forced}
+      title="Change Password"
+      maxWidth="sm"
+      footer={
+        <>
+          {!forced && (
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+          )}
+          <Button onClick={handleSubmit} disabled={loading}>
+            Change
+          </Button>
+        </>
+      }
     >
-      <DialogTitle>Change Password</DialogTitle>
+      <div className="space-y-4 pt-1">
+        {forced && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            You must change your password to continue.
+          </div>
+        )}
 
-      <DialogContent>
-        <Stack spacing={2} mt={1}>
-          {forced && <Alert severity="warning">You must change your password to continue.</Alert>}
+        {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          {error && <Alert severity="error">{error}</Alert>}
+        <div className="space-y-2">
+          <label htmlFor="current-password" className="text-sm font-medium">
+            Current Password
+          </label>
+          <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+        </div>
 
-          <TextField
-            label="Current Password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            fullWidth
-          />
-
-          <TextField
-            label="New Password"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            fullWidth
-          />
-        </Stack>
-      </DialogContent>
-
-      <DialogActions>
-        {!forced && <Button onClick={onClose}>Cancel</Button>}
-        <Button onClick={handleSubmit} variant="contained" disabled={loading}>
-          Change
-        </Button>
-      </DialogActions>
-    </Dialog>
+        <div className="space-y-2">
+          <label htmlFor="new-password" className="text-sm font-medium">
+            New Password
+          </label>
+          <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+        </div>
+      </div>
+    </AppModal>
   );
 }
