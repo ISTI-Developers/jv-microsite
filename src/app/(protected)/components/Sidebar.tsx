@@ -1,17 +1,23 @@
-// src/components/Sidebar.tsx
 'use client';
 
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import ChangePasswordModal from './ChangePasswordModal';
-import { Roles } from '@/constants/roles';
 import UserProfileModal from '../users/UserProfileModal';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api';
 
 export const SIDEBAR_WIDTH = 260;
+
+type NavItem = {
+  id: number;
+  label: string;
+  path: string;
+};
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
@@ -26,37 +32,21 @@ export default function Sidebar() {
   const profileModalOpen = !forced && (forcedProfile || changeOpenProfile);
   const blocking = forced || forcedProfile;
 
-  const navItems = useMemo(() => {
-    if (!user) return [];
+  const { data: navItems = [] } = useQuery<NavItem[]>({
+    queryKey: ['navigation'],
+    queryFn: async () => {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/navigation`);
+      const data = await res.json();
 
-    switch (user.role_id) {
-      case Roles.SUPER_USER:
-        return [
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Users', href: '/users' },
-          { label: 'Expenses', href: '/expense' },
-          { label: 'Revenues', href: '/revenue' },
-        ];
-      case Roles.ADMIN:
-        return [
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Users', href: '/users' },
-          { label: 'Expenses', href: '/expense' },
-          { label: 'Revenues', href: '/revenue' },
-          { label: 'MOAs', href: '/expense-moas' },
-          { label: 'Sites', href: '/site-management' },
-        ];
-      case Roles.JOINT_VENTURE:
-        return [
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Expenses', href: '/expense' },
-          { label: 'Revenues', href: '/revenue' },
-          { label: 'JV Expenses', href: '/jv/expense-moas' },
-        ];
-      default:
-        return [{ label: 'Dashboard', href: '/dashboard' }];
-    }
-  }, [user]);
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch navigation');
+      }
+
+      return data.data;
+    },
+    enabled: !!user,
+  });
+  console.log(navItems);
 
   const content = (
     <div className="flex h-full flex-col">
@@ -67,8 +57,8 @@ export default function Sidebar() {
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map((item) => (
           <Link
-            key={item.href}
-            href={item.href}
+            key={item.id}
+            href={item.path}
             onClick={() => setOpen(false)}
             className="block rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
           >

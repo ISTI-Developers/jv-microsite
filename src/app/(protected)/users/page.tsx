@@ -1,31 +1,19 @@
 // src/app/(private)/users/page.tsx
 'use client';
 
-import { ROLE_LABELS, Roles } from '@/constants/roles';
-import { ACTIVE_STATUS_CONFIG, FORCE_PASSWORD_CHANGE_CONFIG } from '@/constants/userStatus';
+import { Roles } from '@/constants/roles';
 import { apiFetch } from '@/lib/api';
-import { Eye, Power, RotateCcw } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { User } from './users.type';
-import DataTable, { Column } from '../components/DataTable';
+import DataTable from '../components/DataTable';
 import UserProfileModal from './UserProfileModal';
 import AppModal from '../components/AppModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-
-function StatusPill({ label, tone = 'default' }: { label: string; tone?: 'default' | 'success' | 'warning' }) {
-  const toneClass =
-    tone === 'success'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-      : tone === 'warning'
-        ? 'border-amber-200 bg-amber-50 text-amber-700'
-        : 'border-slate-200 bg-slate-50 text-slate-700';
-
-  return <span className={cn('inline-flex rounded-full border px-2.5 py-1 text-xs font-medium', toneClass)}>{label}</span>;
-}
-
+import { createUserColumns } from './columns';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 export default function UsersPage() {
   const queryClient = useQueryClient();
 
@@ -33,7 +21,10 @@ export default function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [inviteRole, setInviteRole] = useState<number>(Roles.JOINT_VENTURE);
-
+  const roleItems = [
+    { label: 'Admin', value: String(Roles.ADMIN) },
+    { label: 'Joint Venture', value: String(Roles.JOINT_VENTURE) },
+  ];
   const {
     data: users,
     isLoading,
@@ -141,96 +132,33 @@ export default function UsersPage() {
     return <div className="p-3 text-sm text-red-600">{error.message}</div>;
   }
 
-  const columns: Column<User>[] = [
-    {
-      header: 'Email',
-      render: (user) => user.email,
-    },
-    {
-      header: 'First Name',
-      render: (user) => user.profile?.first_name ?? '—',
-    },
-    {
-      header: 'Last Name',
-      render: (user) => user.profile?.last_name ?? '—',
-    },
-    {
-      header: 'Role',
-      render: (user) => <StatusPill label={ROLE_LABELS[user.role_id] ?? '—'} />,
-    },
-    {
-      header: 'Active',
-      render: (user) => {
-        const active = ACTIVE_STATUS_CONFIG[user.is_active ? 1 : 0];
-        return <StatusPill label={active.label} tone={active.color === 'success' ? 'success' : 'default'} />;
-      },
-    },
-    {
-      header: 'Force Change Password',
-      render: (user) => {
-        const force = FORCE_PASSWORD_CHANGE_CONFIG[user.force_password_change ? 1 : 0];
-        return <StatusPill label={force.label} tone={force.color === 'warning' ? 'warning' : 'default'} />;
-      },
-    },
-    {
-      header: 'Last Login',
-      render: (user) => (user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'),
-    },
-    {
-      header: 'Actions',
-      align: 'right',
-      render: (user) => {
-        const isActive = user.is_active === 1;
-
-        return (
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              title="View Profile"
-              className="rounded-lg border border-input p-2 transition hover:bg-muted"
-              onClick={() => setSelectedUser(user)}
-            >
-              <Eye className="size-4" />
-            </button>
-
-            <button
-              type="button"
-              title="Reset Password"
-              className="rounded-lg border border-input p-2 transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-              onClick={() => handleReset(user.id)}
-              disabled={resetMutation.isPending}
-            >
-              <RotateCcw className="size-4" />
-            </button>
-
-            <button
-              type="button"
-              title={isActive ? 'Deactivate User' : 'Activate User'}
-              className={cn(
-                'rounded-lg border p-2 transition disabled:pointer-events-none disabled:opacity-50',
-                isActive ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-rose-200 text-rose-700 hover:bg-rose-50'
-              )}
-              onClick={() =>
-                toggleMutation.mutate({
-                  userId: user.id,
-                  status: isActive ? 0 : 1,
-                })
-              }
-              disabled={toggleMutation.isPending}
-            >
-              <Power className="size-4" />
-            </button>
-          </div>
-        );
-      },
-    },
-  ];
+  const columns = createUserColumns({
+    setSelectedUser,
+    handleReset,
+    resetPending: resetMutation.isPending,
+    togglePending: toggleMutation.isPending,
+    toggleStatus: toggleMutation.mutate,
+  });
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
-        <Button onClick={() => setOpenInvite(true)}>Invite User</Button>
+      <div className="mb-6 flex flex-col gap-3 rounded-3xl border border-border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
+            <Users className="h-7 w-7 text-muted-foreground" />
+          </div>
+
+          <div className="space-y-1">
+            <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
+            <p className="text-sm text-muted-foreground">Manage users and invitations</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOpenInvite(true)}>
+            Invite User
+          </Button>
+        </div>
       </div>
 
       <DataTable rows={users ?? []} columns={columns} getRowKey={(row) => row.id} />
@@ -241,8 +169,8 @@ export default function UsersPage() {
         open={openInvite}
         onClose={() => setOpenInvite(false)}
         title="Invite User"
-        maxWidth="xs"
-        actions={
+        maxWidth="sm"
+        footer={
           <>
             <Button variant="outline" onClick={() => setOpenInvite(false)}>
               Cancel
@@ -265,15 +193,24 @@ export default function UsersPage() {
             <label htmlFor="invite-role" className="text-sm font-medium">
               Role
             </label>
-            <select
-              id="invite-role"
-              value={inviteRole}
-              onChange={(e) => setInviteRole(Number(e.target.value))}
-              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-            >
-              <option value={Roles.ADMIN}>Admin</option>
-              <option value={Roles.JOINT_VENTURE}>Joint Venture</option>
-            </select>
+
+            <Select value={String(inviteRole)} onValueChange={(value) => setInviteRole(Number(value))}>
+              <SelectTrigger id="invite-role" className="h-10 w-full rounded-lg">
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Roles</SelectLabel>
+
+                  {roleItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </AppModal>

@@ -7,20 +7,26 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Moa } from '../../../types/moa';
 
+type MoaListResponse = {
+  data: Moa[];
+  error?: string;
+};
+
 export default function JVExpenseMoasPage() {
   const router = useRouter();
   const { user } = useAuth();
+
   const { data: moas } = useQuery<Moa[]>({
     queryKey: ['jv-moas'],
     queryFn: async () => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/jv/moa`);
-      const data = await res.json();
+      const data: MoaListResponse = await res.json();
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to fetch MOAs');
       }
 
-      return data.data;
+      return data.data ?? [];
     },
   });
 

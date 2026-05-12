@@ -1,42 +1,64 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
-import { MoaData, Category, ApiCategory, ExpenseItem } from '../../../../types/moa';
+import { ApiCategory, Category, ExpenseItem, MoaData } from '../../../../types/moa';
 import { ExpensePayload } from './moaId.types';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import JVComboSelect from '@/app/(protected)/components/jvComboSelect';
+import { toast } from 'sonner';
+import GTabs from '@/app/(protected)/components/GTabs';
+import ExpenseTable from './ExpenseTable';
 
 type EditableExpenseItem = ExpenseItem & {
   _tempId?: string;
 };
 
+type EditableExpensesMap = Record<number, Record<string, EditableExpenseItem[]>>;
+type SelectedAccountsByLoc = Record<number, number[]>;
+
 export default function JVExpenseMoaDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const moaId = params.moaId as string;
 
   const [tabIndex, setTabIndex] = useState(0);
+  const [expenses, setExpenses] = useState<EditableExpensesMap>({});
+  const [selectedAccountsByLoc, setSelectedAccountsByLoc] = useState<SelectedAccountsByLoc>({});
+  const tempIdRef = useRef(0);
 
-  const { data } = useQuery<MoaData>({
+  const makeTempId = useCallback(() => {
+    tempIdRef.current += 1;
+    return `tmp-${tempIdRef.current}`;
+  }, []);
+
+  const { data, refetch } = useQuery<MoaData>({
     queryKey: ['jv-moa', moaId],
     queryFn: async () => {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/jv/moa/show?id=${moaId}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed');
+      }
+
       return json.data;
     },
+    enabled: !!moaId,
   });
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['expense-categories'],
     queryFn: async () => {
-      const res = await apiFetch(`https://api.unmg.com.ph/jv/expenses/category`);
+      const res = await apiFetch('https://api.unmg.com.ph/jv/expenses/category');
       const json: { data: ApiCategory[]; error?: string } = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed');
+      }
+
       return json.data.map((c) => ({
         id: Number(c.cAcctNo),
         name: c.cTitle,
@@ -44,18 +66,22 @@ export default function JVExpenseMoaDetailPage() {
     },
   });
 
-  const initialExpenses = useMemo(() => {
+  const initialExpenses = useMemo<EditableExpensesMap>(() => {
     if (!data?.expenses) return {};
 
-    const mapped: Record<number, Record<number, EditableExpenseItem[]>> = {};
+    const mapped: EditableExpensesMap = {};
 
-    Object.entries(data.expenses).forEach(([locId, cats]) => {
-      mapped[+locId] = {};
+    Object.entries(data.expenses).forEach(([locId, accounts]) => {
+      mapped[Number(locId)] = {};
 
-      Object.entries(cats).forEach(([catId, items]) => {
-        mapped[+locId][+catId] = items.map((item) => ({
+      Object.entries(accounts).forEach(([accountNo, items]) => {
+        mapped[Number(locId)][String(accountNo)] = items.map((item) => ({
           ...item,
-          _tempId: item.id ? `db-${item.id}` : crypto.randomUUID(),
+          account_no: item.account_no ?? accountNo,
+          particulars: item.particulars ?? '',
+          due_date_from: item.due_date_from ?? null,
+          due_date_to: item.due_date_to ?? null,
+          _tempId: item.id ? `db-${item.id}` : undefined,
         }));
       });
     });
@@ -63,60 +89,80 @@ export default function JVExpenseMoaDetailPage() {
     return mapped;
   }, [data]);
 
-  const [expenses, setExpenses] = useState<Record<number, Record<number, EditableExpenseItem[]>>>({});
+  const initialSelectedAccountsByLoc = useMemo<SelectedAccountsByLoc>(() => {
+    const mapped: SelectedAccountsByLoc = {};
 
-  const [selectedCategoriesByLoc, setSelectedCategoriesByLoc] = useState<Record<number, Category[]>>({});
+    Object.entries(initialExpenses).forEach(([locId, accounts]) => {
+      mapped[Number(locId)] = Object.keys(accounts).map(Number);
+    });
 
-  const [snack, setSnack] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error';
-  }>({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+    return mapped;
+  }, [initialExpenses]);
 
   const currentExpenses = Object.keys(expenses).length > 0 || !data?.expenses ? expenses : initialExpenses;
 
-  const updateCell = (locId: number, catId: number, index: number, field: keyof ExpenseItem, value: string) => {
+  const currentSelectedAccountsByLoc =
+    Object.keys(selectedAccountsByLoc).length > 0 || !data?.expenses ? selectedAccountsByLoc : initialSelectedAccountsByLoc;
+
+  const visibleLocations = useMemo(() => {
+    if (!data?.locations) return [];
+    if (!data.allowed_locations || data.allowed_locations.length === 0) {
+      return data.locations;
+    }
+
+    return data.locations.filter((loc) => data.allowed_locations?.includes(loc.id));
+  }, [data]);
+
+  const updateCell = (locId: number, catId: string | number, index: number, field: keyof ExpenseItem, value: string) => {
+    const accountKey = String(catId);
+
     setExpenses((prev) => {
       const source = Object.keys(prev).length > 0 ? prev : initialExpenses;
-      const rows = [...(source[locId]?.[catId] || [])];
+      const rows = [...(source[locId]?.[accountKey] || [])];
 
-      rows[index] = {
+      const nextRow: EditableExpenseItem = {
         ...rows[index],
         [field]: field === 'amount' ? Number(value || 0) : value,
       };
+
+      if (field === 'due_date_from' && nextRow.due_date_to && value && nextRow.due_date_to < value) {
+        nextRow.due_date_to = value;
+      }
+
+      rows[index] = nextRow;
 
       return {
         ...source,
         [locId]: {
           ...(source[locId] || {}),
-          [catId]: rows,
+          [accountKey]: rows,
         },
       };
     });
   };
 
-  const addRow = (locId: number, catId: number) => {
+  const addRow = (locId: number, catId: string | number) => {
+    const accountKey = String(catId);
+
     setExpenses((prev) => {
       const source = Object.keys(prev).length > 0 ? prev : initialExpenses;
-      const rows = source[locId]?.[catId] || [];
+      const rows = source[locId]?.[accountKey] || [];
 
       return {
         ...source,
         [locId]: {
           ...(source[locId] || {}),
-          [catId]: [
+          [accountKey]: [
             ...rows,
             {
-              _tempId: crypto.randomUUID(),
-              date: '',
+              _tempId: makeTempId(),
+              account_no: accountKey,
+              particulars: '',
+              amount: 0,
+              due_date_from: null,
+              due_date_to: null,
               ref_no: '',
               payee: '',
-              name: '',
-              amount: 0,
             },
           ],
         },
@@ -124,17 +170,20 @@ export default function JVExpenseMoaDetailPage() {
     });
   };
 
-  const deleteRow = (locId: number, catId: number, index: number) => {
+  const deleteRow = (locId: number, catId: string | number, index: number) => {
+    const accountKey = String(catId);
+
     setExpenses((prev) => {
       const source = Object.keys(prev).length > 0 ? prev : initialExpenses;
-      const rows = [...(source[locId]?.[catId] || [])];
+      const rows = [...(source[locId]?.[accountKey] || [])];
+
       rows.splice(index, 1);
 
       return {
         ...source,
         [locId]: {
           ...(source[locId] || {}),
-          [catId]: rows,
+          [accountKey]: rows,
         },
       };
     });
@@ -143,16 +192,18 @@ export default function JVExpenseMoaDetailPage() {
   const mutation = useMutation({
     mutationFn: async () => {
       const payload: ExpensePayload[] = [];
-      Object.entries(currentExpenses).forEach(([locId, cats]) => {
-        Object.entries(cats).forEach(([catId, items]) => {
+
+      Object.entries(currentExpenses).forEach(([locId, accounts]) => {
+        Object.entries(accounts).forEach(([accountNo, items]) => {
           items.forEach((item) => {
             payload.push({
               id: item.id ?? null,
               location_id: Number(locId),
-              category_id: Number(catId),
-              name: item.name,
-              amount: item.amount,
-              date: item.date,
+              account_no: item.account_no ?? accountNo,
+              particulars: item.particulars ?? '',
+              amount: Number(item.amount || 0),
+              due_date_from: item.due_date_from ?? null,
+              due_date_to: item.due_date_to ?? null,
               ref_no: item.ref_no,
               payee: item.payee,
             });
@@ -169,192 +220,101 @@ export default function JVExpenseMoaDetailPage() {
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to submit');
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed');
+      }
 
       return json;
     },
-
-    onSuccess: () => {
-      setSnack({
-        open: true,
-        message: 'Expenses saved successfully',
-        severity: 'success',
-      });
+    onSuccess: async () => {
+      toast.success('Saved successfully');
+      setExpenses({});
+      setSelectedAccountsByLoc({});
+      await refetch();
     },
-
     onError: (err) => {
       if (err instanceof Error) {
-        setSnack({
-          open: true,
-          message: err.message,
-          severity: 'error',
-        });
+        toast.error(err.message);
       } else {
-        setSnack({
-          open: true,
-          message: 'Something went wrong',
-          severity: 'error',
-        });
+        toast.error('Something went wrong');
       }
     },
   });
 
+  const activeLocation = visibleLocations[tabIndex] ?? null;
+  const selectedIds = activeLocation ? currentSelectedAccountsByLoc[activeLocation.id] || [] : [];
+  const selectedCats = categories.filter((c) => selectedIds.includes(c.id));
+
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">{data?.moa.moa_name}</h1>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold">{data?.moa.moa_name}</h1>
+        </div>
+
+        <Button variant="outline" onClick={() => router.back()}>
+          Back
+        </Button>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {data?.locations.map((loc) => (
-          <button
-            key={loc.id}
-            type="button"
-            onClick={() => setTabIndex(data.locations.findIndex((item) => item.id === loc.id))}
-            className={cn(
-              'rounded-xl border px-4 py-2 text-sm font-medium transition',
-              data.locations[tabIndex]?.id === loc.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-muted'
-            )}
-          >
-            {loc.location_name}
-          </button>
-        ))}
-      </div>
+      <GTabs
+        value={activeLocation ? String(activeLocation.id) : ''}
+        onChange={(val) => {
+          const index = visibleLocations.findIndex((l) => String(l.id) === val);
+          setTabIndex(index >= 0 ? index : 0);
+        }}
+        items={visibleLocations.map((loc) => ({
+          value: String(loc.id),
+          label: loc.location_name,
+        }))}
+      />
 
-      {data?.locations[tabIndex] &&
-        (() => {
-          const loc = data.locations[tabIndex];
-          const existingCatIds = Object.keys(currentExpenses[loc.id] || {}).map(Number);
-          const existingCats = categories.filter((c) => existingCatIds.includes(c.id));
-          const selectedCatsRaw = selectedCategoriesByLoc[loc.id] || existingCats;
-          const selectedCats = Array.from(new Map(selectedCatsRaw.map((c) => [c.id, c])).values());
-
-          return (
-            <div key={loc.id}>
-              <div className="mb-6 rounded-2xl border border-border bg-card p-4">
-                <label htmlFor={`categories-${loc.id}`} className="mb-2 block text-sm font-medium">
-                  Categories
-                </label>
-                <select
-                  id={`categories-${loc.id}`}
-                  multiple
-                  value={selectedCats.map((cat) => String(cat.id))}
-                  onChange={(event) => {
-                    const chosen = Array.from(event.target.selectedOptions, (option) =>
-                      categories.find((item) => String(item.id) === option.value)
-                    ).filter(Boolean) as Category[];
-
-                    const merged = [...chosen.filter((value) => !existingCatIds.includes(value.id)), ...existingCats];
-
-                    const unique = Array.from(new Map(merged.map((c) => [c.id, c])).values());
-
-                    setSelectedCategoriesByLoc((prev) => ({
-                      ...prev,
-                      [loc.id]: unique,
-                    }));
-                  }}
-                  className="min-h-36 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {categories.map((category) => (
-                    <option key={category.id} value={String(category.id)}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedCats.map((cat) => {
-                const rows = expenses[loc.id]?.[cat.id] || [];
-                const rows = currentExpenses[loc.id]?.[cat.id] || [];
-
-                return (
-                  <div key={cat.id} className="mb-6 rounded-2xl border border-border bg-card p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="font-semibold">{cat.name}</p>
-
-                      <Button size="sm" onClick={() => addRow(loc.id, cat.id)}>
-                        + Add Row
-                      </Button>
-                    </div>
-
-                    <div className="mb-2 hidden grid-cols-[1.2fr_1.4fr_2fr_3fr_1.2fr_48px] gap-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:grid">
-                      <span>Date</span>
-                      <span>Ref No</span>
-                      <span>Payee</span>
-                      <span>Particulars</span>
-                      <span>Amount</span>
-                      <span />
-                    </div>
-
-                    {rows.map((row, i) => (
-                      <div
-                        key={row._tempId}
-                        className="mb-2 grid gap-2 rounded-xl border border-border/70 p-3 lg:grid-cols-[1.2fr_1.4fr_2fr_3fr_1.2fr_48px] lg:border-0 lg:p-0"
-                      >
-                        <Input
-                          type="date"
-                          value={row.date || ''}
-                          onChange={(e) => updateCell(loc.id, cat.id, i, 'date', e.target.value)}
-                          className="h-10"
-                        />
-
-                        <Input
-                          value={row.ref_no || ''}
-                          onChange={(e) => updateCell(loc.id, cat.id, i, 'ref_no', e.target.value)}
-                          placeholder="Ref No"
-                          className="h-10"
-                        />
-
-                        <Input
-                          value={row.payee || ''}
-                          onChange={(e) => updateCell(loc.id, cat.id, i, 'payee', e.target.value)}
-                          placeholder="Payee"
-                          className="h-10"
-                        />
-
-                        <Input
-                          value={row.name || ''}
-                          onChange={(e) => updateCell(loc.id, cat.id, i, 'name', e.target.value)}
-                          placeholder="Particulars"
-                          className="h-10"
-                        />
-
-                        <Input
-                          type="number"
-                          value={row.amount || ''}
-                          onChange={(e) => updateCell(loc.id, cat.id, i, 'amount', e.target.value)}
-                          placeholder="Amount"
-                          className="h-10"
-                        />
-
-                        <Button type="button" variant="outline" size="icon" onClick={() => deleteRow(loc.id, cat.id, i)} className="h-10 w-10">
-                          <Trash2 className="size-4" />
-                          <span className="sr-only">Delete row</span>
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-
-      <Button className="w-full" onClick={() => mutation.mutate()}>
-        Save
-      </Button>
-      {snack.open && (
-        <div className="fixed top-4 right-4 z-50">
-          <div
-            className={cn(
-              'rounded-xl border px-4 py-3 text-sm shadow-lg',
-              snack.severity === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'
-            )}
-          >
-            {snack.message}
+      {activeLocation && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="font-medium">{activeLocation.location_name}</h2>
+            {activeLocation.report_group ? <p className="text-sm text-muted-foreground">{activeLocation.report_group}</p> : null}
           </div>
+
+          <JVComboSelect
+            options={categories.map((c) => ({
+              value: c.id,
+              label: c.name,
+            }))}
+            value={selectedIds}
+            onChange={(vals) =>
+              setSelectedAccountsByLoc((prev) => ({
+                ...prev,
+                [activeLocation.id]: vals,
+              }))
+            }
+            placeholder="Select Account"
+          />
+
+          {selectedCats.map((cat) => {
+            const accountKey = String(cat.id);
+            const rows = currentExpenses[activeLocation.id]?.[accountKey] || [];
+
+            return (
+              <ExpenseTable
+                key={accountKey}
+                locId={activeLocation.id}
+                catId={accountKey}
+                catName={cat.name}
+                rows={rows}
+                addRow={addRow}
+                deleteRow={deleteRow}
+                updateCell={updateCell}
+              />
+            );
+          })}
         </div>
       )}
+
+      <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+        {mutation.isPending ? 'Saving...' : 'Save'}
+      </Button>
     </div>
   );
 }

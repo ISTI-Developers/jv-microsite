@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 type Props = {
   open: boolean;
   user: User | null;
@@ -60,7 +61,7 @@ export default function UserProfileModal({ open, user, onClose }: Props) {
       onClose={onClose}
       title="User Profile"
       maxWidth="sm"
-      actions={
+      footer={
         <>
           <Button variant="outline" onClick={onClose}>
             Cancel
@@ -95,15 +96,14 @@ export default function UserProfileModal({ open, user, onClose }: Props) {
           <label htmlFor="profile-entity-type" className="text-sm font-medium">
             Entity Type
           </label>
-          <select
-            id="profile-entity-type"
-            value={entityType}
-            onChange={(e) => setEntityType(e.target.value as 'individual' | 'company')}
-            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-          >
-            <option value="individual">Individual</option>
-            <option value="company">Company</option>
-          </select>
+          <Select value={entityType} onValueChange={(val) => setEntityType(val as 'individual' | 'company')}>
+            <SelectTrigger id="profile-entity-type">
+              <SelectValue placeholder="Select entity type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="individual">Individual</SelectItem> <SelectItem value="company">Company</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {entityType === 'company' && (

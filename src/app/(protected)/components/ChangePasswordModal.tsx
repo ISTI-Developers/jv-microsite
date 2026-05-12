@@ -70,8 +70,8 @@ export default function ChangePasswordModal({ open, onClose, forced = false }: P
       onClose={forced ? () => {} : onClose}
       hideCloseButton={forced}
       title="Change Password"
-      maxWidth="xs"
-      actions={
+      maxWidth="sm"
+      footer={
         <>
           {!forced && (
             <Button variant="outline" onClick={onClose}>
@@ -97,20 +97,14 @@ export default function ChangePasswordModal({ open, onClose, forced = false }: P
           <label htmlFor="current-password" className="text-sm font-medium">
             Current Password
           </label>
-          <Input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className="h-10"
-          />
+          <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
         </div>
 
         <div className="space-y-2">
           <label htmlFor="new-password" className="text-sm font-medium">
             New Password
           </label>
-          <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="h-10" />
+          <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
         </div>
       </div>
     </AppModal>

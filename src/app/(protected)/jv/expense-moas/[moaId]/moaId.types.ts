@@ -1,10 +1,11 @@
 export interface ExpensePayload {
   id: number | null;
   location_id: number;
-  category_id: number;
-  name: string;
+  account_no: string | number;
+  particulars: string;
   amount: number;
-  date: string;
+  due_date_from: string | null;
+  due_date_to: string | null;
   ref_no: string;
   payee: string;
 }
