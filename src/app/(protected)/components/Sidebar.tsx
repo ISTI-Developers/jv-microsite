@@ -16,7 +16,9 @@ export const SIDEBAR_WIDTH = 260;
 type NavItem = {
   id: number;
   label: string;
-  path: string;
+  path: string | null;
+  parent_id: number | null;
+  display_order: number;
 };
 
 export default function Sidebar() {
@@ -46,7 +48,11 @@ export default function Sidebar() {
     },
     enabled: !!user,
   });
-  console.log(navItems);
+
+  const parentItems = navItems.filter((item) => item.parent_id === null);
+  const childItems = navItems.filter((item) => item.parent_id !== null);
+
+  const getChildren = (parentId: number) => childItems.filter((item) => item.parent_id === parentId);
 
   const content = (
     <div className="flex h-full flex-col">
@@ -55,16 +61,45 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map((item) => (
-          <Link
-            key={item.id}
-            href={item.path}
-            onClick={() => setOpen(false)}
-            className="block rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
-          >
-            {item.label}
-          </Link>
-        ))}
+        {parentItems.map((item) => {
+          const children = getChildren(item.id);
+
+          if (children.length > 0) {
+            return (
+              <div key={item.id} className="space-y-1">
+                <p className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{item.label}</p>
+
+                <div className="space-y-1 pl-2">
+                  {children.map((child) => (
+                    <Link
+                      key={child.id}
+                      href={child.path || '#'}
+                      onClick={() => setOpen(false)}
+                      className="block rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
+                    >
+                      {child.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
+          if (!item.path) {
+            return null;
+          }
+
+          return (
+            <Link
+              key={item.id}
+              href={item.path}
+              onClick={() => setOpen(false)}
+              className="block rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="border-t border-border px-3 py-4">
