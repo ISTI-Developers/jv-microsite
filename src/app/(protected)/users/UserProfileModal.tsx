@@ -8,13 +8,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import UserActivityLogs from './UserActivityLogs';
 type Props = {
   open: boolean;
   user: User | null;
   onClose: () => void;
+  showActivityLogs?: boolean;
 };
 
-export default function UserProfileModal({ open, user, onClose }: Props) {
+export default function UserProfileModal({ open, user, onClose, showActivityLogs = false }: Props) {
   const { user: currentUser, refreshUser } = useAuth();
   const queryClient = useQueryClient();
   const [firstName, setFirstName] = useState(user?.profile?.first_name ?? '');
@@ -60,7 +62,7 @@ export default function UserProfileModal({ open, user, onClose }: Props) {
       open={open}
       onClose={onClose}
       title="User Profile"
-      maxWidth="sm"
+      maxWidth="xl"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
@@ -114,6 +116,8 @@ export default function UserProfileModal({ open, user, onClose }: Props) {
             <Input id="profile-company-name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="h-10" />
           </div>
         )}
+
+        {showActivityLogs ? <UserActivityLogs userId={user.id} /> : null}
       </div>
     </AppModal>
   );

@@ -24,7 +24,7 @@ export type Revenue = {
   cBrandName?: string;
   cGroupName?: string;
   cReportGroup?: string;
-  realizedRevenue?: number | string;
+  realizedRevenue?: number | string | null;
 };
 
 export type SavedRevenue = {
@@ -43,7 +43,9 @@ export type SavedRevenue = {
 
 export type SavedRevenueMap = Record<string, SavedRevenue>;
 
-export type RevenueRow = Revenue;
+export type RevenueRow = Revenue & {
+  rowKey: string;
+};
 
 export async function fetchSavedRevenues(invoiceIds: string[]) {
   if (!invoiceIds.length) return {};
@@ -79,8 +81,9 @@ export async function fetchRevenues(from: string, to: string) {
 
   const savedRevenueMap = await fetchSavedRevenues(invoiceIds);
 
-  return erpRows.map((row) => ({
+  return erpRows.map((row, index) => ({
     ...row,
+    rowKey: `${row.cInvNo?.trim() || ''}-${row.cContractID?.trim() || ''}-${row.cJobNo?.trim() || ''}-${index}`,
     realizedRevenue: savedRevenueMap[row.cInvNo]?.amount ?? '',
   })) as RevenueRow[];
 }
@@ -88,11 +91,15 @@ export async function fetchRevenues(from: string, to: string) {
 export async function saveRealizedRevenues(rows: RevenueRow[], moaSharedId?: number | null) {
   const payloadRows = rows
     .filter((row) => row.realizedRevenue !== '' && row.realizedRevenue !== null && row.realizedRevenue !== undefined)
-    .map(({ realizedRevenue, ...row }) => ({
-      ...row,
-      moa_shared_id: moaSharedId ?? null,
-      realized_revenue: Number(realizedRevenue),
-    }));
+    .map(({ realizedRevenue, rowKey, ...row }) => {
+      void rowKey;
+
+      return {
+        ...row,
+        moa_shared_id: moaSharedId ?? null,
+        realized_revenue: Number(realizedRevenue),
+      };
+    });
 
   const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/revenue/realizedRevenue`, {
     method: 'POST',

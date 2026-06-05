@@ -2,13 +2,19 @@
 
 import { useEffect, useMemo, useState, type SubmitEventHandler } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+
 import { useAuth } from '@/context/AuthContext';
-import Image from 'next/image';
+import { apiFetch } from '@/lib/api';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -71,93 +77,100 @@ export default function LoginPage() {
       <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
       <div className="absolute -right-24 -bottom-28 h-80 w-80 rounded-full bg-indigo-500/20 blur-3xl" />
 
-      <div className="relative z-10 w-full max-w-[460px] rounded-3xl border border-white/70 bg-white/85 p-6 shadow-2xl backdrop-blur sm:p-8">
-        <div className="mb-6 flex flex-col items-center gap-4">
+      <Card className="relative z-10 w-full max-w-[460px] rounded-3xl border border-white/70 bg-white/85 p-6 shadow-2xl backdrop-blur sm:p-8">
+        <CardHeader className="mb-6 flex flex-col items-center gap-4 space-y-0 p-0 text-center">
           <div className="grid h-[72px] w-[72px] place-items-center rounded-2xl bg-white shadow-lg shadow-slate-900/10">
             <Image src="/icon.png" alt="JV Microsite" width={48} height={48} style={{ objectFit: 'contain' }} priority />
           </div>
 
-          <div className="text-center">
+          <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950">JV Microsite</h1>
             <p className="mt-1 text-sm text-slate-500">Sign in to continue</p>
           </div>
-        </div>
+        </CardHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium text-slate-700">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="h-11 rounded-xl border-slate-200 bg-white px-3"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium text-slate-700">
-              Password
-            </label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-11 rounded-xl border-slate-200 bg-white px-3 pr-11"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((value) => !value)}
-                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 transition hover:text-slate-900"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600"
-              />
-              Remember me
-            </label>
-
-            <Link href="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-              Forgot password?
-            </Link>
-          </div>
-
-          <Button type="submit" size="lg" disabled={!canSubmit} className="h-11 w-full rounded-xl">
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <LoaderCircle className="size-4 animate-spin" />
-                Signing in...
-              </span>
-            ) : (
-              'Sign In'
+        <CardContent className="p-0">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <Alert variant="destructive" className="rounded-2xl">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
-          </Button>
 
-          <div className="border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
-            By continuing, you agree to the company policies and acceptable use.
-          </div>
-        </form>
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium text-slate-700">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-11 rounded-xl border-slate-200 bg-white px-3"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium text-slate-700">
+                Password
+              </Label>
+
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-11 rounded-xl border-slate-200 bg-white px-3 pr-11"
+                />
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute inset-y-0 right-0 flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 hover:bg-transparent hover:text-slate-900"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox id="rememberMe" checked={rememberMe} onCheckedChange={(checked) => setRememberMe(checked === true)} />
+                <Label htmlFor="rememberMe" className="cursor-pointer text-sm font-normal text-slate-600">
+                  Remember me
+                </Label>
+              </div>
+
+              <Button asChild variant="link" className="h-auto p-0 text-sm font-medium text-blue-600 hover:text-blue-700">
+                <Link href="/forgot-password">Forgot password?</Link>
+              </Button>
+            </div>
+
+            <Button type="submit" size="lg" disabled={!canSubmit} className="h-11 w-full rounded-xl">
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                'Sign In'
+              )}
+            </Button>
+          </form>
+        </CardContent>
+
+        <CardFooter className="mt-4 border-t border-slate-200 p-0 pt-4">
+          <p className="w-full text-center text-xs text-slate-500">By continuing, you agree to the company policies and acceptable use.</p>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

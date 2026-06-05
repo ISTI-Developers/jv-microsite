@@ -21,6 +21,7 @@ export default function RevenuePage() {
   const [to, setTo] = useState<Dayjs | null>(today);
   const [params, setParams] = useState<{ from: string; to: string } | null>(null);
   const [rows, setRows] = useState<RevenueRow[]>([]);
+  const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const { data, isFetching, isError } = useQuery({
@@ -36,8 +37,33 @@ export default function RevenuePage() {
   useEffect(() => {
     if (data) {
       setRows(data);
+      setSelectedGroupName(null);
     }
   }, [data]);
+
+  const groupedRows = useMemo(() => {
+    return rows.reduce<Record<string, RevenueRow[]>>((acc, row) => {
+      const groupName = row.cGroupName?.trim() || 'Ungrouped';
+
+      if (!acc[groupName]) {
+        acc[groupName] = [];
+      }
+
+      acc[groupName].push(row);
+
+      return acc;
+    }, {});
+  }, [rows]);
+
+  const groupTabs = useMemo(() => Object.keys(groupedRows), [groupedRows]);
+
+  const displayedRows = useMemo(() => {
+    if (!selectedGroupName) {
+      return rows;
+    }
+
+    return groupedRows[selectedGroupName] || [];
+  }, [groupedRows, rows, selectedGroupName]);
 
   const handleSearch = () => {
     if (!from || !to) return;
@@ -185,6 +211,7 @@ export default function RevenuePage() {
                 setTo(today);
                 setParams(null);
                 setRows([]);
+                setSelectedGroupName(null);
               }}
             >
               Reset
@@ -203,8 +230,48 @@ export default function RevenuePage() {
 
       {isError && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">Failed to load revenue.</div>}
 
+      <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+        <div className="mb-3 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Showing {displayedRows.length} of {rows.length} rows
+          </p>
+          {selectedGroupName && <p className="truncate sm:max-w-[24rem]">Selected group: {selectedGroupName}</p>}
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setSelectedGroupName(null)}
+            className={cn(
+              'shrink-0 rounded-xl border px-4 py-2 text-sm font-medium transition',
+              selectedGroupName === null
+                ? 'border-primary/30 bg-primary text-primary-foreground shadow-sm'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+          >
+            All ({rows.length})
+          </button>
+
+          {groupTabs.map((groupName) => (
+            <button
+              key={groupName}
+              type="button"
+              onClick={() => setSelectedGroupName(groupName)}
+              className={cn(
+                'max-w-[18rem] shrink-0 truncate rounded-xl border px-4 py-2 text-sm font-medium transition',
+                selectedGroupName === groupName
+                  ? 'border-primary/30 bg-primary text-primary-foreground shadow-sm'
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              {groupName} ({groupedRows[groupName]?.length || 0})
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-3xl border border-border bg-card shadow-sm">
-        <DataTable rows={rows} columns={columns} getRowKey={(row) => row.cInvNo} loading={isFetching} pagination paginationMode="frontend" />
+        <DataTable rows={displayedRows} columns={columns} getRowKey={(row) => row.rowKey} loading={isFetching} pagination paginationMode="frontend" />
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import DataTable, { Column } from '../../components/DataTable';
+import DataTable from '../../components/DataTable';
 import { apiFetch } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Moa } from '../../../types/moa';
+import { columns } from './columns';
 
 type MoaListResponse = {
   data: Moa[];
@@ -29,17 +30,6 @@ export default function JVExpenseMoasPage() {
       return data.data ?? [];
     },
   });
-
-  const columns: Column<Moa>[] = [
-    {
-      header: 'MOA',
-      render: (row) => row.moa_name,
-    },
-    {
-      header: 'Locations',
-      render: (row) => (row.locations.length ? row.locations.map((l) => l.location_name).join(', ') : '—'),
-    },
-  ];
 
   return (
     <div>

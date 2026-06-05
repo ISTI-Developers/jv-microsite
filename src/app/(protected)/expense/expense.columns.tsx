@@ -6,20 +6,26 @@ import { ExpenseRow } from './action';
 
 export function getExpenseColumns(setRows: Dispatch<SetStateAction<ExpenseRow[]>>): Column<ExpenseRow>[] {
   return [
-    { header: 'Transaction No.', render: (row) => row.cTranNo.trim() },
+    { header: 'Transaction No.', sortable: true, sortValue: (row) => row.cTranNo.trim(), render: (row) => row.cTranNo.trim() },
     {
       header: 'Date',
+      sortable: true,
+      sortValue: (row) => dayjs(row.dDate).valueOf(),
       render: (row) => dayjs(row.dDate).format('MMM DD, YYYY'),
     },
-    { header: 'Payee', render: (row) => row.cName },
+    { header: 'Payee', sortable: true, sortValue: (row) => row.cName ?? '', render: (row) => row.cName },
     {
       header: 'Month',
+      sortable: true,
+      sortValue: () => '',
       render: () => 'N/A',
     },
-    { header: 'Lease Contract ID', render: (row) => row.cleaseContractID },
+    { header: 'Lease Contract ID', sortable: true, sortValue: (row) => row.cleaseContractID ?? '', render: (row) => row.cleaseContractID },
     {
       header: 'Amount',
       align: 'right',
+      sortable: true,
+      sortValue: (row) => Number(row.nAmount ?? 0),
       render: (row) =>
         Number(row.nAmount).toLocaleString(undefined, {
           minimumFractionDigits: 2,
@@ -29,6 +35,8 @@ export function getExpenseColumns(setRows: Dispatch<SetStateAction<ExpenseRow[]>
     {
       header: 'Realized Expense',
       align: 'right',
+      sortable: true,
+      sortValue: (row) => Number(row.realizedExpense || 0),
       render: (row) => (
         <Input
           type="number"
@@ -40,7 +48,7 @@ export function getExpenseColumns(setRows: Dispatch<SetStateAction<ExpenseRow[]>
 
             setRows((prev) =>
               prev.map((item) =>
-                item.cTranNo === row.cTranNo
+                item.rowKey === row.rowKey
                   ? {
                       ...item,
                       realizedExpense: value,
@@ -53,9 +61,8 @@ export function getExpenseColumns(setRows: Dispatch<SetStateAction<ExpenseRow[]>
         />
       ),
     },
-    { header: 'Title', render: (row) => row.cTitle },
-    { header: 'Location', render: (row) => row.cLocation },
-    { header: 'Report Group', render: (row) => row.cReportGroup },
-    { header: 'Group Name', render: (row) => row.cGroupName },
+    { header: 'Title', sortable: true, sortValue: (row) => row.cTitle ?? '', render: (row) => row.cTitle },
+    { header: 'Location', sortable: true, sortValue: (row) => row.cLocation ?? '', render: (row) => row.cLocation },
+    { header: 'Report Group', sortable: true, sortValue: (row) => row.cReportGroup ?? '', render: (row) => row.cReportGroup },
   ];
 }

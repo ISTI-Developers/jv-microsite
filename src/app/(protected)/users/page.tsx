@@ -163,7 +163,13 @@ export default function UsersPage() {
 
       <DataTable rows={users ?? []} columns={columns} getRowKey={(row) => row.id} />
 
-      <UserProfileModal key={selectedUser?.id ?? 'none'} open={!!selectedUser} user={selectedUser} onClose={() => setSelectedUser(null)} />
+      <UserProfileModal
+        key={selectedUser?.id ?? 'none'}
+        open={!!selectedUser}
+        user={selectedUser}
+        onClose={() => setSelectedUser(null)}
+        showActivityLogs
+      />
 
       <AppModal
         open={openInvite}

@@ -21,7 +21,7 @@ export function getColumns(setRows: Dispatch<SetStateAction<RevenueList[]>>): Co
     {
       header: 'Reference Date',
       sortable: true,
-      sortValue: (row) => row.reference_date,
+      sortValue: (row) => (row.reference_date ? dayjs(row.reference_date).valueOf() : 0),
       render: (row) => dayjs(row.reference_date).format('MMM DD, YYYY'),
     },
     {
@@ -51,18 +51,20 @@ export function getColumns(setRows: Dispatch<SetStateAction<RevenueList[]>>): Co
     {
       header: 'Date From',
       sortable: true,
-      sortValue: (row) => row.date_from,
+      sortValue: (row) => (row.date_from ? dayjs(row.date_from).valueOf() : 0),
       render: (row) => dayjs(row.date_from).format('MMM DD, YYYY'),
     },
     {
       header: 'Date To',
       sortable: true,
-      sortValue: (row) => row.date_to,
+      sortValue: (row) => (row.date_to ? dayjs(row.date_to).valueOf() : 0),
       render: (row) => dayjs(row.date_to).format('MMM DD, YYYY'),
     },
     {
       header: 'Realized Revenue',
       align: 'right',
+      sortable: true,
+      sortValue: (row) => Number(row.collectionAmount || 0),
       render: (row) => (
         <Input
           type="number"

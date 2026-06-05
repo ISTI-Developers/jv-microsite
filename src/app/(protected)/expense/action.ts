@@ -24,7 +24,7 @@ export type Expense = {
   cLocation: string;
   cReportGroup: string;
   cGroupName: string;
-  realizedExpense?: number | string;
+  realizedExpense?: number | string | null;
 };
 
 export type SavedExpense = {
@@ -43,7 +43,9 @@ export type SavedExpense = {
 
 export type SavedExpenseMap = Record<string, SavedExpense>;
 
-export type ExpenseRow = Expense;
+export type ExpenseRow = Expense & {
+  rowKey: string;
+};
 
 export async function fetchSavedExpenses(transactionIds: string[]) {
   if (!transactionIds.length) return {};
@@ -79,8 +81,9 @@ export async function fetchExpenses(from: string, to: string) {
 
   const savedExpenseMap = await fetchSavedExpenses(transactionIds);
 
-  return erpRows.map((row) => ({
+  return erpRows.map((row, index) => ({
     ...row,
+    rowKey: `${row.cTranNo.trim()}-${row.cleaseContractID?.trim() || ''}-${index}`,
     realizedExpense: savedExpenseMap[row.cTranNo.trim()]?.amount ?? '',
   })) as ExpenseRow[];
 }
@@ -88,11 +91,15 @@ export async function fetchExpenses(from: string, to: string) {
 export async function saveRealizedExpenses(rows: ExpenseRow[], moaSharedId?: number | null) {
   const payloadRows = rows
     .filter((row) => row.realizedExpense !== '' && row.realizedExpense !== null && row.realizedExpense !== undefined)
-    .map(({ realizedExpense, ...row }) => ({
-      ...row,
-      moa_shared_id: moaSharedId ?? null,
-      realized_expense: Number(realizedExpense),
-    }));
+    .map(({ realizedExpense, rowKey, ...row }) => {
+      void rowKey;
+
+      return {
+        ...row,
+        moa_shared_id: moaSharedId ?? null,
+        realized_expense: Number(realizedExpense),
+      };
+    });
 
   const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/expenses/realizedExpenses`, {
     method: 'POST',

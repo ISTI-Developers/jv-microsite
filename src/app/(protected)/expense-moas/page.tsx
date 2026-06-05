@@ -3,27 +3,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import DataTable, { Column } from '../components/DataTable';
+import DataTable from '../components/DataTable';
 import { apiFetch } from '@/lib/api';
 import MoaModal from '../components/CreateMoaModal';
-import { Location, Moa, JVUser } from '../../types/moa';
+import { Moa } from '../../types/moa';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { FileText } from 'lucide-react';
-
-function getUniqueJvUsers(locations: Location[]): JVUser[] {
-  const map = new Map<number, JVUser>();
-
-  locations.forEach((loc) => {
-    loc.jv_users.forEach((user) => {
-      if (!map.has(user.id)) {
-        map.set(user.id, user);
-      }
-    });
-  });
-
-  return Array.from(map.values());
-}
+import { createExpenseMoaColumns } from './columns';
 
 type MoaListResponse = {
   data: Moa[];
@@ -51,67 +37,7 @@ export default function ExpenseMoasPage() {
     },
   });
 
-  const columns: Column<Moa>[] = [
-    {
-      header: 'MOA',
-      render: (row) => <span className="font-medium">{row.moa_name}</span>,
-    },
-    {
-      header: 'Locations',
-      render: (row) => <Badge variant="secondary">{row.locations.length}</Badge>,
-    },
-    {
-      header: 'JV Partners',
-      render: (row) => {
-        const uniqueUsers = getUniqueJvUsers(row.locations);
-        return <Badge variant="secondary">{uniqueUsers.length}</Badge>;
-      },
-    },
-    {
-      header: 'Creation Date',
-      render: (row) => row.created_at,
-    },
-    {
-      header: 'Actions',
-      align: 'right',
-      render: (row) => (
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(`/expense-moas/${row.id}`);
-            }}
-          >
-            View
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(`/jv/expense-moas/${row.id}`);
-            }}
-          >
-            Expenses
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedMoa(row);
-              setEditOpen(true);
-            }}
-          >
-            Edit
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  const columns = createExpenseMoaColumns({ router, setSelectedMoa, setEditOpen });
 
   return (
     <div>

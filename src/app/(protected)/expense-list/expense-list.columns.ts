@@ -48,13 +48,13 @@ export const columns: Column<ExpenseListRow>[] = [
   {
     header: 'Due Date From',
     sortable: true,
-    sortValue: (row) => row.due_date_from ?? '',
+    sortValue: (row) => (row.due_date_from ? dayjs(row.due_date_from).valueOf() : 0),
     render: (row) => (row.due_date_from ? dayjs(row.due_date_from).format('MMM DD, YYYY') : '—'),
   },
   {
     header: 'Due Date To',
     sortable: true,
-    sortValue: (row) => row.due_date_to ?? '',
+    sortValue: (row) => (row.due_date_to ? dayjs(row.due_date_to).valueOf() : 0),
     render: (row) => (row.due_date_to ? dayjs(row.due_date_to).format('MMM DD, YYYY') : '—'),
   },
   {
@@ -89,15 +89,9 @@ export const columns: Column<ExpenseListRow>[] = [
     render: (row) => row.remarks ?? '—',
   },
   {
-    header: 'Group Name',
-    sortable: true,
-    sortValue: (row) => row.group_name ?? '',
-    render: (row) => row.group_name ?? '—',
-  },
-  {
     header: 'Date Created',
     sortable: true,
-    sortValue: (row) => row.date_created ?? '',
+    sortValue: (row) => (row.date_created ? dayjs(row.date_created).valueOf() : 0),
     render: (row) => (row.date_created ? dayjs(row.date_created).format('MMM DD, YYYY hh:mm A') : '—'),
   },
 ];

@@ -10,6 +10,7 @@ import MoaHeader from './components/MoaHeader';
 import EmptyState from './components/EmptyState';
 import LoadingState from './components/LoadingState';
 import ErrorState from './components/ErrorState';
+import MoaActivityLogs from './components/MoaActivityLogs';
 import MoaModal from '../../components/CreateMoaModal';
 import { JVUser, Location, MoaData, Moa } from '@/app/types/moa';
 
@@ -61,6 +62,8 @@ export default function ExpenseMoaDetailPage() {
           ))}
         </div>
       )}
+
+      <MoaActivityLogs moaId={moaId} />
 
       <MoaModal key={editData.id} open={editOpen} onClose={() => setEditOpen(false)} editData={editData} />
     </div>

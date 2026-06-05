@@ -7,24 +7,22 @@ type ApiFetchOptions = RequestInit & {
 };
 
 export async function apiFetch(url: string, options: ApiFetchOptions = {}) {
-  const session = localStorage.getItem('session');
+  const { router, skipAuthRedirectOn401, skipAuthHeader, headers, ...fetchOptions } = options;
+
+  const session = typeof window !== 'undefined' ? localStorage.getItem('session') : null;
 
   const res = await fetch(url, {
-    ...options,
+    ...fetchOptions,
     headers: {
-      ...(options.headers || {}),
-      ...(session && !options.skipAuthHeader ? { Authorization: `Bearer ${session}` } : {}),
       'Content-Type': 'application/json',
+      ...(headers || {}),
+      ...(session && !skipAuthHeader ? { Authorization: `Bearer ${session}` } : {}),
     },
   });
 
-  if (res.status === 401 && !options.skipAuthRedirectOn401) {
+  if (res.status === 401 && !skipAuthRedirectOn401) {
     localStorage.removeItem('session');
-
-    if (options.router) {
-      options.router.replace('/login');
-    }
-
+    router?.replace('/login');
     throw new Error('Unauthorized');
   }
 
