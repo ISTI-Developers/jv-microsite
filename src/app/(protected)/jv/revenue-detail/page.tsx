@@ -5,9 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import DataTable from '../../components/DataTable';
 import { fetchJVRevenues, RevenueList, saveJVCollectionInputs } from './action';
 import { getColumns } from './columns';
-import { LoaderCircle, Wallet } from 'lucide-react';
+import { HandCoins, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import PageHeader from '../../components/PageHeader';
 
 export default function RevenuePage() {
   const [rows, setRows] = useState<RevenueList[]>([]);
@@ -50,22 +51,17 @@ export default function RevenuePage() {
 
   return (
     <div className="space-y-6">
-      <div className="mb-6 flex flex-col gap-3 rounded-3xl border border-border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
-            <Wallet className="h-7 w-7 text-muted-foreground" />
-          </div>
-
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold tracking-tight">JV Collection</h1>
-            <p className="text-sm text-muted-foreground">ERP Collection Report</p>
-          </div>
-        </div>
-
-        <Button onClick={handleSave} disabled={isSaving || isFetching || !hasCollectionInput} className="h-11 rounded-xl px-6">
-          {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : 'Save'}
-        </Button>
-      </div>
+      <PageHeader
+        title="JV - Revenue Detail"
+        subtitle="ERP Revenue Report"
+        icon={HandCoins}
+        actions={
+          <Button onClick={handleSave} disabled={isSaving || isFetching || !hasCollectionInput} className="h-10 rounded-xl px-5">
+            {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : 'Save'}
+          </Button>
+        }
+        className="mb-6"
+      />
 
       {isError && <p className="mb-4 text-sm text-red-600">Failed to load collection.</p>}
 

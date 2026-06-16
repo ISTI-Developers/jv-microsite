@@ -1,4 +1,3 @@
-import { Dispatch, SetStateAction } from 'react';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,11 +20,9 @@ function getUniqueJvUsers(locations: Location[]): JVUser[] {
 
 type CreateExpenseMoaColumnsParams = {
   router: AppRouterInstance;
-  setSelectedMoa: Dispatch<SetStateAction<Moa | null>>;
-  setEditOpen: Dispatch<SetStateAction<boolean>>;
 };
 
-export function createExpenseMoaColumns({ router, setSelectedMoa, setEditOpen }: CreateExpenseMoaColumnsParams): Column<Moa>[] {
+export function createExpenseMoaColumns({ router }: CreateExpenseMoaColumnsParams): Column<Moa>[] {
   return [
     {
       header: 'MOA',
@@ -85,8 +82,7 @@ export function createExpenseMoaColumns({ router, setSelectedMoa, setEditOpen }:
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              setSelectedMoa(row);
-              setEditOpen(true);
+              router.push(`/expense-moas/${row.id}/edit`);
             }}
           >
             Edit

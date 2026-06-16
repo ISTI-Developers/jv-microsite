@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { columns } from './columns';
+import PageHeader from '../../components/PageHeader';
 
 const DEFAULT_LIMIT = 10;
 
@@ -70,25 +71,19 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-3xl border border-border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
-            <ClipboardList className="h-7 w-7 text-muted-foreground" />
-          </div>
-
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold tracking-tight">Audit Logs</h1>
-            <p className="text-sm text-muted-foreground">Review admin audit activity across users, modules, and entities</p>
-          </div>
-        </div>
-
-        {isFetching && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Loading
-          </div>
-        )}
-      </div>
+      <PageHeader
+        title="Audit Logs"
+        subtitle="Review admin audit activity across users, modules, and entities"
+        icon={ClipboardList}
+        actions={
+          isFetching && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" />
+              Loading
+            </div>
+          )
+        }
+      />
 
       <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

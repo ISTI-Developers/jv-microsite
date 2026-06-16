@@ -1,5 +1,3 @@
-// src/app/(protected)/admin/users/columns.tsx
-
 import { Eye, Power, RotateCcw } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';

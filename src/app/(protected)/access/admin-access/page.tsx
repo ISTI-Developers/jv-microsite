@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Roles } from '@/constants/roles';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import PageHeader from '../../components/PageHeader';
 
 export default function AdminAccessPage() {
   const queryClient = useQueryClient();
@@ -85,22 +86,7 @@ export default function AdminAccessPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden rounded-3xl bg-gradient-to-br from-background via-card to-muted/40 shadow-sm">
-        <CardContent className="p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
-                <ShieldCheck className="h-7 w-7 text-muted-foreground" />
-              </div>
-
-              <h1 className="text-3xl font-semibold tracking-tight">Admin Access</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Control the general menu and action access for all Admin users.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <PageHeader title="Admin Access" subtitle="Control the general menu and action access for all Admin users." icon={ShieldCheck} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="rounded-3xl shadow-sm">

@@ -57,7 +57,7 @@ export function getExpenseColumns(setRows: Dispatch<SetStateAction<ExpenseRow[]>
               )
             );
           }}
-          className="min-w-[140px] text-right"
+          className="min-w-[140px] border-border bg-muted/50 text-right font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         />
       ),
     },

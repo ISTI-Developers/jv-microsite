@@ -30,6 +30,7 @@ type DataTableProps<T> = {
   rowsPerPage?: number;
   onPageChange?: (page: number) => void;
   onRowsPerPageChange?: (rowsPerPage: number) => void;
+  hideSearch?: boolean;
 };
 
 function flattenValue(value: unknown): string {
@@ -74,6 +75,7 @@ export default function DataTable<T>({
   rowsPerPage: controlledRowsPerPage,
   onPageChange,
   onRowsPerPageChange,
+  hideSearch = false,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState('');
   const [internalPage, setInternalPage] = useState(0);
@@ -211,9 +213,16 @@ export default function DataTable<T>({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-      <div className="border-b border-border px-4 py-3">
-        <Input value={search} onChange={(event) => handleSearchChange(event.target.value)} placeholder="Search all columns..." className="max-w-sm" />
-      </div>
+      {!hideSearch && (
+        <div className="border-b border-border px-4 py-3">
+          <Input
+            value={search}
+            onChange={(event) => handleSearchChange(event.target.value)}
+            placeholder="Search all columns..."
+            className="max-w-sm"
+          />
+        </div>
+      )}
 
       <Table className="min-w-full">
         <TableHeader className="bg-muted/50">

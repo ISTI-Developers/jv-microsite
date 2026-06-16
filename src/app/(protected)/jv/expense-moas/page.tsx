@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Moa } from '../../../types/moa';
 import { columns } from './columns';
+import { Handshake } from 'lucide-react';
+import PageHeader from '../../components/PageHeader';
 
 type MoaListResponse = {
   data: Moa[];
@@ -32,12 +34,12 @@ export default function JVExpenseMoasPage() {
   });
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          JV Expense - {user?.profile.first_name} {user?.profile.last_name}
-        </h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={`JV Expense - ${user?.profile.first_name ?? ''} ${user?.profile.last_name ?? ''}`}
+        subtitle="Review assigned expense MOAs and locations"
+        icon={Handshake}
+      />
 
       <DataTable rows={moas ?? []} columns={columns} getRowKey={(row) => row.id} onRowClick={(row) => router.push(`/jv/expense-moas/${row.id}`)} />
     </div>

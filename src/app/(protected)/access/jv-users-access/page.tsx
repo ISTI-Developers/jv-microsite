@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { UserCog } from 'lucide-react';
+import { UsersRound } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AccessAction, AccessMenu, fetchActionAccess, fetchJVUsers, fetchMenuAccess, saveUserActionAccess, saveUserMenuAccess } from '../action';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Roles } from '@/constants/roles';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectTrigger, SelectValue, SelectItem } from '@/components/ui/select';
+import PageHeader from '../../components/PageHeader';
 
 type OverrideValue = 'inherit' | 'allow' | 'deny';
 
@@ -139,41 +140,31 @@ export default function JVUsersAccessPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden rounded-3xl bg-gradient-to-br from-background via-card to-muted/40 shadow-sm">
-        <CardContent className="p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
-                <UserCog className="h-7 w-7 text-muted-foreground" />
-              </div>
+      <PageHeader
+        title="JV Users Access"
+        subtitle="Control menu and action overrides for a specific JV user."
+        icon={UsersRound}
+        actions={
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-background/70 p-4">
+            <label className="text-sm font-medium">Select JV User</label>
+            <Select value={selectedUserId ? String(selectedUserId) : ''} onValueChange={handleUserChange}>
+              <SelectTrigger className="mt-2 w-full rounded-xl">
+                <SelectValue placeholder={usersFetching ? 'Loading users...' : 'Select user'} />
+              </SelectTrigger>
 
-              <h1 className="text-3xl font-semibold tracking-tight">JV Users Access</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Control menu and action overrides for a specific JV user.</p>
-            </div>
+              <SelectContent>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={String(user.id)}>
+                    {user.profile?.company_name || `${user.profile?.first_name || ''} ${user.profile?.last_name || ''}`.trim() || user.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            <Card className="w-full max-w-sm rounded-3xl bg-background/70 shadow-none">
-              <CardContent className="p-5">
-                <label className="text-sm font-medium">Select JV User</label>
-                <Select value={selectedUserId ? String(selectedUserId) : ''} onValueChange={handleUserChange}>
-                  <SelectTrigger className="mt-2 w-full rounded-xl">
-                    <SelectValue placeholder={usersFetching ? 'Loading users...' : 'Select user'} />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {users.map((user) => (
-                      <SelectItem key={user.id} value={String(user.id)}>
-                        {user.profile?.company_name || `${user.profile?.first_name || ''} ${user.profile?.last_name || ''}`.trim() || user.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {selectedUser && <p className="mt-3 text-xs text-muted-foreground">{selectedUser.email}</p>}
-              </CardContent>
-            </Card>
+            {selectedUser && <p className="mt-3 text-xs text-muted-foreground">{selectedUser.email}</p>}
           </div>
-        </CardContent>
-      </Card>
+        }
+      />
 
       {!selectedUserId && (
         <Card className="rounded-3xl border-dashed shadow-sm">

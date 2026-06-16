@@ -1,4 +1,3 @@
-// src/app/(private)/users/page.tsx
 'use client';
 
 import { Roles } from '@/constants/roles';
@@ -10,6 +9,7 @@ import { User } from './users.type';
 import DataTable from '../components/DataTable';
 import UserProfileModal from './UserProfileModal';
 import AppModal from '../components/AppModal';
+import PageHeader from '../components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createUserColumns } from './columns';
@@ -142,24 +142,17 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 rounded-3xl border border-border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
-            <Users className="h-7 w-7 text-muted-foreground" />
-          </div>
-
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
-            <p className="text-sm text-muted-foreground">Manage users and invitations</p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title="Users"
+        subtitle="Manage users and invitations"
+        icon={Users}
+        actions={
           <Button variant="outline" size="sm" onClick={() => setOpenInvite(true)}>
             Invite User
           </Button>
-        </div>
-      </div>
+        }
+        className="mb-6"
+      />
 
       <DataTable rows={users ?? []} columns={columns} getRowKey={(row) => row.id} />
 

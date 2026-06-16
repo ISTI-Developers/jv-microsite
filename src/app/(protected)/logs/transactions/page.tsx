@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CalendarIcon, LoaderCircle, ReceiptText } from 'lucide-react';
+import { CalendarIcon, LoaderCircle, ScrollText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { columns } from './columns';
+import PageHeader from '../../components/PageHeader';
 
 const DEFAULT_LIMIT = 10;
 
@@ -80,25 +81,19 @@ export default function TransactionLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-3xl border border-border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
-            <ReceiptText className="h-7 w-7 text-muted-foreground" />
-          </div>
-
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold tracking-tight">Transaction Logs</h1>
-            <p className="text-sm text-muted-foreground">Review transaction activity across references, MOAs, structures, and accounts</p>
-          </div>
-        </div>
-
-        {isFetching && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Loading
-          </div>
-        )}
-      </div>
+      <PageHeader
+        title="Transaction Logs"
+        subtitle="Review transaction activity across references, MOAs, structures, and accounts"
+        icon={ScrollText}
+        actions={
+          isFetching && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" />
+              Loading
+            </div>
+          )
+        }
+      />
 
       <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
