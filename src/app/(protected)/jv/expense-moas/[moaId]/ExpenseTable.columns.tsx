@@ -16,19 +16,44 @@ type UserMeta = {
   company_name?: string | null;
 };
 
-export type EditableExpenseItem = BaseExpenseItem & {
+export type EditableExpenseItem = Omit<BaseExpenseItem, 'amount'> & {
+  amount: number | string;
   _tempId?: string;
   user?: UserMeta;
 };
+
+type ExpenseRowValidationErrors = Partial<Record<'due_date_from' | 'due_date_to' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>;
 
 type GetExpenseTableColumnsParams = {
   locId: number;
   catId: string | number;
   deleteRow: (locId: number, catId: string | number, index: number) => void;
   updateCell: (locId: number, catId: string | number, index: number, field: keyof BaseExpenseItem, value: string) => void;
+  submitAttempted: boolean;
+  rowValidationErrors: Record<string, ExpenseRowValidationErrors>;
 };
 
-export function getExpenseTableColumns({ locId, catId, deleteRow, updateCell }: GetExpenseTableColumnsParams): Column<EditableExpenseItem>[] {
+const getRowKey = (row: EditableExpenseItem) => row._tempId ?? `db-${row.id}`;
+
+const FieldError = ({ message }: { message?: string }) => {
+  if (!message) return null;
+
+  return <p className="mt-1 text-sm text-destructive">{message}</p>;
+};
+
+export function getExpenseTableColumns({
+  locId,
+  catId,
+  deleteRow,
+  updateCell,
+  submitAttempted,
+  rowValidationErrors,
+}: GetExpenseTableColumnsParams): Column<EditableExpenseItem>[] {
+  const getFieldError = (row: EditableExpenseItem, field: keyof ExpenseRowValidationErrors) => {
+    if (!submitAttempted) return undefined;
+    return rowValidationErrors[getRowKey(row)]?.[field];
+  };
+
   return [
     {
       header: 'User',
@@ -63,94 +88,156 @@ export function getExpenseTableColumns({ locId, catId, deleteRow, updateCell }: 
       header: 'Due Date From',
       sortable: true,
       sortValue: (row) => (row.due_date_from ? dayjs(row.due_date_from).valueOf() : 0),
-      render: (row, index) => (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(
-                'h-10 w-full min-w-[10rem] justify-start rounded-xl text-left font-normal',
-                !row.due_date_from && 'text-muted-foreground'
-              )}
-            >
-              <CalendarIcon className="mr-2 size-4 shrink-0" />
-              {row.due_date_from ? dayjs(row.due_date_from).format('MMM DD, YYYY') : <span>Pick a date</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto rounded-2xl p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={row.due_date_from ? dayjs(row.due_date_from).toDate() : undefined}
-              onSelect={(date) => {
-                const value = date ? dayjs(date).format('YYYY-MM-DD') : '';
-                updateCell(locId, catId, index, 'due_date_from', value);
+      render: (row, index) => {
+        const error = getFieldError(row, 'due_date_from');
 
-                if (row.due_date_to && value && row.due_date_to < value) {
-                  updateCell(locId, catId, index, 'due_date_to', value);
-                }
-              }}
-              autoFocus
-            />
-          </PopoverContent>
-        </Popover>
-      ),
+        return (
+          <div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-invalid={!!error}
+                  className={cn(
+                    'h-10 w-full min-w-[10rem] justify-start rounded-xl text-left font-normal',
+                    !row.due_date_from && 'text-muted-foreground',
+                    error && 'border-destructive'
+                  )}
+                >
+                  <CalendarIcon className="mr-2 size-4 shrink-0" />
+                  {row.due_date_from ? dayjs(row.due_date_from).format('MMM DD, YYYY') : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto rounded-2xl p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={row.due_date_from ? dayjs(row.due_date_from).toDate() : undefined}
+                  onSelect={(date) => {
+                    const value = date ? dayjs(date).format('YYYY-MM-DD') : '';
+                    updateCell(locId, catId, index, 'due_date_from', value);
+
+                    if (row.due_date_to && value && row.due_date_to < value) {
+                      updateCell(locId, catId, index, 'due_date_to', value);
+                    }
+                  }}
+                  autoFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <FieldError message={error} />
+          </div>
+        );
+      },
     },
     {
       header: 'Due Date To',
       sortable: true,
       sortValue: (row) => (row.due_date_to ? dayjs(row.due_date_to).valueOf() : 0),
-      render: (row, index) => (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              className={cn('h-10 w-full min-w-[10rem] justify-start rounded-xl text-left font-normal', !row.due_date_to && 'text-muted-foreground')}
-            >
-              <CalendarIcon className="mr-2 size-4 shrink-0" />
-              {row.due_date_to ? dayjs(row.due_date_to).format('MMM DD, YYYY') : <span>Pick a date</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto rounded-2xl p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={row.due_date_to ? dayjs(row.due_date_to).toDate() : undefined}
-              onSelect={(date) => updateCell(locId, catId, index, 'due_date_to', date ? dayjs(date).format('YYYY-MM-DD') : '')}
-              disabled={(date) => Boolean(row.due_date_from) && dayjs(date).isBefore(dayjs(row.due_date_from), 'day')}
-              autoFocus
-            />
-          </PopoverContent>
-        </Popover>
-      ),
+      render: (row, index) => {
+        const error = getFieldError(row, 'due_date_to');
+
+        return (
+          <div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-invalid={!!error}
+                  className={cn(
+                    'h-10 w-full min-w-[10rem] justify-start rounded-xl text-left font-normal',
+                    !row.due_date_to && 'text-muted-foreground',
+                    error && 'border-destructive'
+                  )}
+                >
+                  <CalendarIcon className="mr-2 size-4 shrink-0" />
+                  {row.due_date_to ? dayjs(row.due_date_to).format('MMM DD, YYYY') : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto rounded-2xl p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={row.due_date_to ? dayjs(row.due_date_to).toDate() : undefined}
+                  onSelect={(date) => updateCell(locId, catId, index, 'due_date_to', date ? dayjs(date).format('YYYY-MM-DD') : '')}
+                  disabled={(date) => Boolean(row.due_date_from) && dayjs(date).isBefore(dayjs(row.due_date_from), 'day')}
+                  autoFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <FieldError message={error} />
+          </div>
+        );
+      },
     },
     {
       header: 'Ref No',
       sortable: true,
       sortValue: (row) => row.ref_no ?? '',
-      render: (row, index) => <Input value={row.ref_no || ''} onChange={(e) => updateCell(locId, catId, index, 'ref_no', e.target.value)} />,
+      render: (row, index) => {
+        const error = getFieldError(row, 'ref_no');
+
+        return (
+          <div>
+            <Input value={row.ref_no || ''} onChange={(e) => updateCell(locId, catId, index, 'ref_no', e.target.value)} aria-invalid={!!error} />
+            <FieldError message={error} />
+          </div>
+        );
+      },
     },
     {
       header: 'Payee',
       sortable: true,
       sortValue: (row) => row.payee ?? '',
-      render: (row, index) => <Input value={row.payee || ''} onChange={(e) => updateCell(locId, catId, index, 'payee', e.target.value)} />,
+      render: (row, index) => {
+        const error = getFieldError(row, 'payee');
+
+        return (
+          <div>
+            <Input value={row.payee || ''} onChange={(e) => updateCell(locId, catId, index, 'payee', e.target.value)} aria-invalid={!!error} />
+            <FieldError message={error} />
+          </div>
+        );
+      },
     },
     {
       header: 'Particulars',
       sortable: true,
       sortValue: (row) => row.particulars ?? '',
-      render: (row, index) => (
-        <Input value={row.particulars || ''} onChange={(e) => updateCell(locId, catId, index, 'particulars', e.target.value)} />
-      ),
+      render: (row, index) => {
+        const error = getFieldError(row, 'particulars');
+
+        return (
+          <div>
+            <Input
+              value={row.particulars || ''}
+              onChange={(e) => updateCell(locId, catId, index, 'particulars', e.target.value)}
+              aria-invalid={!!error}
+            />
+            <FieldError message={error} />
+          </div>
+        );
+      },
     },
     {
       header: 'Amount',
       sortable: true,
       sortValue: (row) => Number(row.amount || 0),
-      render: (row, index) => (
-        <Input type="number" value={row.amount || ''} onChange={(e) => updateCell(locId, catId, index, 'amount', e.target.value)} />
-      ),
+      render: (row, index) => {
+        const error = getFieldError(row, 'amount');
+
+        return (
+          <div>
+            <Input
+              type="number"
+              value={row.amount ?? ''}
+              onChange={(e) => updateCell(locId, catId, index, 'amount', e.target.value)}
+              aria-invalid={!!error}
+            />
+            <FieldError message={error} />
+          </div>
+        );
+      },
     },
     {
       header: '',

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { hasMinLength, isNonEmpty, isValidEmail, isWithinMaxLength } from '@/lib/validation';
 
 type Step = 'email' | 'otp' | 'reset';
 
@@ -15,6 +16,32 @@ export default function ForgotPassword() {
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitAttemptedStep, setSubmitAttemptedStep] = useState<Step | null>(null);
+
+  const getEmailError = (value: string) => {
+    if (!isNonEmpty(value)) return 'Email is required.';
+    if (!isWithinMaxLength(value, 255)) return 'Email must be 255 characters or fewer.';
+    if (!isValidEmail(value)) return 'Enter a valid email address.';
+    return null;
+  };
+
+  const getOtpError = (value: string) => {
+    if (!isNonEmpty(value)) return 'OTP is required.';
+    if (!isWithinMaxLength(value, 20)) return 'OTP must be 20 characters or fewer.';
+    if (!/^\d+$/.test(value.trim())) return 'OTP must contain numbers only.';
+    return null;
+  };
+
+  const getNewPasswordError = (value: string) => {
+    if (!isNonEmpty(value)) return 'New password is required.';
+    if (!hasMinLength(value, 8)) return 'Password must be at least 8 characters.';
+    if (!isWithinMaxLength(value, 128)) return 'Password must be 128 characters or fewer.';
+    return null;
+  };
+
+  const emailError = submitAttemptedStep === 'email' ? getEmailError(email) : null;
+  const otpError = submitAttemptedStep === 'otp' ? getOtpError(otp) : null;
+  const newPasswordError = submitAttemptedStep === 'reset' ? getNewPasswordError(newPassword) : null;
 
   const submit = async (url: string, body: object) => {
     setLoading(true);
@@ -51,34 +78,44 @@ export default function ForgotPassword() {
   };
 
   const handleEmail = async () => {
-    if (!email.trim()) {
-      setError('Email is required');
+    setSubmitAttemptedStep('email');
+
+    const validationError = getEmailError(email);
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    await submit('/auth/forgot-password', { email });
+
+    await submit('/auth/forgot-password', { email: email.trim() });
     setStep('otp');
+    setSubmitAttemptedStep(null);
   };
 
   const handleOtp = async () => {
-    if (!otp.trim()) {
-      setError('OTP is required');
+    setSubmitAttemptedStep('otp');
+
+    const validationError = getOtpError(otp);
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    await submit('/auth/verify-otp', { email, otp });
+
+    await submit('/auth/verify-otp', { email: email.trim(), otp: otp.trim() });
     setStep('reset');
+    setSubmitAttemptedStep(null);
   };
 
   const handleReset = async () => {
-    if (!newPassword.trim()) {
-      setError('New password is required');
+    setSubmitAttemptedStep('reset');
+
+    const validationError = getNewPasswordError(newPassword);
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
+
     await submit('/auth/reset-password', {
-      email,
+      email: email.trim(),
       new_password: newPassword,
     });
     window.location.href = '/login';
@@ -103,16 +140,26 @@ export default function ForgotPassword() {
           {step === 'email' && (
             <div className="space-y-2">
               <label htmlFor="forgot-email" className="text-sm font-medium">
-                Email
+                Email <span className="text-destructive">*</span>
               </label>
-              <Input id="forgot-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11 rounded-xl" />
+              <Input
+                id="forgot-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                maxLength={255}
+                aria-invalid={!!emailError}
+                className="h-11 rounded-xl"
+              />
+              {emailError && <p className="text-sm text-destructive">{emailError}</p>}
             </div>
           )}
 
           {step === 'otp' && (
             <div className="space-y-2">
               <label htmlFor="forgot-otp" className="text-sm font-medium">
-                OTP
+                OTP <span className="text-destructive">*</span>
               </label>
               <Input
                 id="forgot-otp"
@@ -121,15 +168,18 @@ export default function ForgotPassword() {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 required
+                maxLength={20}
+                aria-invalid={!!otpError}
                 className="h-11 rounded-xl"
               />
+              {otpError && <p className="text-sm text-destructive">{otpError}</p>}
             </div>
           )}
 
           {step === 'reset' && (
             <div className="space-y-2">
               <label htmlFor="forgot-new-password" className="text-sm font-medium">
-                New Password
+                New Password <span className="text-destructive">*</span>
               </label>
               <Input
                 id="forgot-new-password"
@@ -137,12 +187,15 @@ export default function ForgotPassword() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
+                maxLength={128}
+                aria-invalid={!!newPasswordError}
                 className="h-11 rounded-xl"
               />
+              {newPasswordError && <p className="text-sm text-destructive">{newPasswordError}</p>}
             </div>
           )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button
             size="lg"

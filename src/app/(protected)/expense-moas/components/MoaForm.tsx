@@ -1,15 +1,15 @@
 'use client';
 
-import { ReactNode, useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, Search, Trash2 } from 'lucide-react';
+import { ReactNode, useId, useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { apiFetch } from '@/lib/api';
 import { User } from '../../users/users.type';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import JVComboSelect from '../../components/jvComboSelect';
+import CheckboxMultiSelect from '../../components/CheckboxMultiSelect';
 import { getTotals, getUserLabel, LocationItem, mapEditLocations } from '../../components/moamodal.types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Moa } from '@/app/types/moa';
 
@@ -17,6 +17,14 @@ type LocationOption = {
   id: number;
   structure_code: string;
   cLocation: string;
+};
+
+type ChildGroupNameRecord = {
+  cCompanyID: string;
+  cCode: string;
+  cAddress: string;
+  cReportGroup: string;
+  cGroupName: string;
 };
 
 type MoaFormRenderSlots = {
@@ -33,17 +41,106 @@ type MoaFormProps = {
   renderLayout?: (slots: MoaFormRenderSlots) => ReactNode;
 };
 
+const getUniqueTrimmedValues = (values: Array<string | null | undefined>) => {
+  const uniqueValues = new Map<string, string>();
+
+  values.forEach((value) => {
+    const trimmedValue = value?.trim();
+    if (!trimmedValue) return;
+
+    const normalizedValue = trimmedValue.toLowerCase();
+    if (!uniqueValues.has(normalizedValue)) {
+      uniqueValues.set(normalizedValue, trimmedValue);
+    }
+  });
+
+  return Array.from(uniqueValues.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+};
+
+const normalizeAddress = (value: string) => {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const getAddressTokens = (value: string) => {
+  return normalizeAddress(value).split(' ').filter(Boolean);
+};
+
+const getAddressSimilarityScore = (selectedLocation: string, childAddress: string) => {
+  const selectedTokens = new Set(getAddressTokens(selectedLocation));
+  const childTokens = new Set(getAddressTokens(childAddress));
+
+  if (selectedTokens.size === 0 || childTokens.size === 0) return 0;
+
+  const overlapCount = Array.from(selectedTokens).filter((token) => childTokens.has(token)).length;
+  return overlapCount / Math.max(selectedTokens.size, childTokens.size);
+};
+
+const findBestChildGroupMatch = (locationName: string, childGroupRecords: ChildGroupNameRecord[]) => {
+  const normalizedLocation = normalizeAddress(locationName);
+  if (!normalizedLocation) return null;
+
+  let bestMatch: ChildGroupNameRecord | null = null;
+  let bestScore = 0;
+
+  for (const record of childGroupRecords) {
+    const normalizedAddress = normalizeAddress(record.cAddress ?? '');
+    if (!normalizedAddress) continue;
+
+    if (normalizedAddress === normalizedLocation) {
+      return record;
+    }
+
+    const score = getAddressSimilarityScore(normalizedLocation, normalizedAddress);
+    if (score > bestScore) {
+      bestMatch = record;
+      bestScore = score;
+    }
+  }
+
+  return bestScore >= 0.6 ? bestMatch : null;
+};
+
+const getManagementFeeError = (value: LocationItem['unai_management_fee'], label: 'UNAI management fee' | 'JV management fee') => {
+  const rawValue = String(value ?? '').trim();
+
+  if (!rawValue) return `${label} is required.`;
+
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) return `${label} must be a valid number.`;
+  if (numericValue < 0) return `${label} cannot be negative.`;
+
+  return null;
+};
+
+const getLocationErrors = (location: LocationItem) => ({
+  name: location.name.trim() ? null : 'Location name is required.',
+  report_group: location.report_group?.trim() ? null : 'Report group is required.',
+  group_name: location.group_name?.trim() ? null : 'Group name is required.',
+  unai_management_fee: getManagementFeeError(location.unai_management_fee, 'UNAI management fee'),
+  jv_management_fee: getManagementFeeError(location.jv_management_fee, 'JV management fee'),
+});
+
+const hasLocationErrors = (location: LocationItem) => {
+  return Object.values(getLocationErrors(location)).some(Boolean);
+};
+
 export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 'modal', renderLayout }: MoaFormProps) {
   const queryClient = useQueryClient();
+  const formId = useId();
+  const reportGroupOptionsId = `${formId}-report-group-options`;
+  const groupNameOptionsId = `${formId}-group-name-options`;
 
   const initialLocations = mapEditLocations(editData);
 
   const [moaName, setMoaName] = useState(editData?.moa_name ?? '');
   const [locations, setLocations] = useState<LocationItem[]>(initialLocations);
   const [activeTab, setActiveTab] = useState(initialLocations[0]?.name ?? '');
-  const [locationSearch, setLocationSearch] = useState('');
-  const [managementFees, setManagementFees] = useState<Record<string, { unai: string; jv: string }>>({});
   const [error, setError] = useState('');
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const { data: users } = useQuery<User[]>({
     queryKey: ['users'],
@@ -81,12 +178,57 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
     },
   });
 
+  const { data: childGroupNameRecords = [] } = useQuery<ChildGroupNameRecord[]>({
+    queryKey: ['moa-child-group-names'],
+    queryFn: async () => {
+      const res = await apiFetch('https://api.unmg.com.ph/jv/getChildGroupName');
+      const json: {
+        success: boolean;
+        data?: ChildGroupNameRecord[];
+        error?: string;
+      } = await res.json();
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to fetch child group names');
+      }
+
+      return Array.isArray(json.data) ? json.data : [];
+    },
+    retry: false,
+  });
+
+  const uniqueReportGroups = useMemo(() => {
+    return getUniqueTrimmedValues(childGroupNameRecords.map((record) => record.cReportGroup));
+  }, [childGroupNameRecords]);
+
+  const uniqueGroupNames = useMemo(() => {
+    return getUniqueTrimmedValues(childGroupNameRecords.map((record) => record.cGroupName));
+  }, [childGroupNameRecords]);
+
   const jvOptions = useMemo(() => {
     return (users ?? []).map((user) => ({
       value: user.id,
       label: getUserLabel(user),
     }));
   }, [users]);
+
+  const locationMultiSelectOptions = useMemo(() => {
+    return locationOptions
+      .map((location) => {
+        const locationName = location.cLocation.trim();
+        if (!locationName) return null;
+
+        return {
+          value: locationName,
+          label: locationName,
+        };
+      })
+      .filter((option): option is { value: string; label: string } => option !== null);
+  }, [locationOptions]);
+
+  const selectedLocationValues = useMemo(() => {
+    return locations.map((location) => location.name.trim()).filter(Boolean);
+  }, [locations]);
 
   const removeLocation = (locationName: string) => {
     const removedIndex = locations.findIndex((location) => location.name === locationName);
@@ -96,12 +238,6 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
     setActiveTab((current) => {
       if (current !== locationName) return current;
       return updated[removedIndex]?.name ?? updated[removedIndex - 1]?.name ?? updated[0]?.name ?? '';
-    });
-    setManagementFees((current) => {
-      const { [locationName]: _removed, ...remaining } = current;
-      void _removed;
-
-      return remaining;
     });
   };
 
@@ -117,10 +253,15 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
       return;
     }
 
+    const childGroupMatch = findBestChildGroupMatch(locationName, childGroupNameRecords);
+
     const newLocation: LocationItem = {
       structure_id: locationOption.id,
       name: locationName,
-      report_group: '',
+      report_group: childGroupMatch?.cReportGroup.trim() ?? '',
+      group_name: childGroupMatch?.cGroupName.trim() ?? '',
+      unai_management_fee: '',
+      jv_management_fee: '',
       jv_users: [],
     };
 
@@ -129,13 +270,39 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
     setError('');
   };
 
-  const updateLocationReportGroup = (locationName: string, value: string) => {
+  const handleLocationSelectChange = (nextValues: string[]) => {
+    const currentValues = selectedLocationValues.map((value) => value.toLowerCase());
+    const addedValue = nextValues.find((value) => !currentValues.includes(value.toLowerCase()));
+
+    if (addedValue) {
+      const locationOption = locationOptions.find((location) => location.cLocation.trim().toLowerCase() === addedValue.toLowerCase());
+
+      if (locationOption) {
+        toggleLocation(locationOption);
+      }
+
+      return;
+    }
+
+    const nextValueSet = new Set(nextValues.map((value) => value.toLowerCase()));
+    const removedLocation = locations.find((location) => !nextValueSet.has(location.name.trim().toLowerCase()));
+
+    if (removedLocation) {
+      removeLocation(removedLocation.name);
+    }
+  };
+
+  const updateLocationField = <K extends 'report_group' | 'group_name' | 'unai_management_fee' | 'jv_management_fee'>(
+    locationName: string,
+    field: K,
+    value: LocationItem[K]
+  ) => {
     setLocations((prev) =>
       prev.map((location) =>
         location.name === locationName
           ? {
               ...location,
-              report_group: value,
+              [field]: value,
             }
           : location
       )
@@ -204,42 +371,23 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
     if (hasDuplicateLocations) return false;
 
     return locations.every((location) => {
-      if (!location.name.trim()) return false;
+      if (hasLocationErrors(location)) return false;
       return getTotals(location).unai >= 0;
     });
   }, [moaName, locations, hasDuplicateLocations]);
-
-  const selectedLocationNames = useMemo(() => {
-    return new Set(locations.map((location) => location.name.trim().toLowerCase()));
-  }, [locations]);
-
-  const filteredLocationOptions = useMemo(() => {
-    const search = locationSearch.trim().toLowerCase();
-
-    if (!search) {
-      return locationOptions;
-    }
-
-    return locationOptions.filter((location) => location.cLocation.toLowerCase().includes(search));
-  }, [locationOptions, locationSearch]);
 
   const activeLocation = useMemo(() => {
     return locations.find((location) => location.name === activeTab) ?? locations[0] ?? null;
   }, [activeTab, locations]);
 
   const activeTotals = activeLocation ? getTotals(activeLocation) : null;
-  const activeManagementFees = activeLocation ? (managementFees[activeLocation.name] ?? { unai: '', jv: '' }) : { unai: '', jv: '' };
-
-  const updateManagementFee = (locationName: string, field: 'unai' | 'jv', value: string) => {
-    setManagementFees((current) => ({
-      ...current,
-      [locationName]: {
-        unai: current[locationName]?.unai ?? '',
-        jv: current[locationName]?.jv ?? '',
-        [field]: value,
-      },
-    }));
-  };
+  const activeLocationErrors = submitAttempted && activeLocation ? getLocationErrors(activeLocation) : null;
+  const moaNameError = submitAttempted && !moaName.trim() ? 'MOA name is required.' : null;
+  const locationSelectionError = submitAttempted && locations.length === 0 ? 'Please select at least one location.' : null;
+  const selectedLocationsError =
+    submitAttempted && locations.length > 0 && locations.some(hasLocationErrors)
+      ? 'Please complete all required fields for each selected location.'
+      : null;
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -248,6 +396,9 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
         structure_id: location.structure_id,
         location_name: location.name.trim(),
         report_group: location.report_group?.trim() ?? '',
+        group_name: location.group_name?.trim() ?? '',
+        unai_management_fee: location.unai_management_fee,
+        jv_management_fee: location.jv_management_fee,
         jv_users: location.jv_users
           .filter((jv) => jv.share_percentage > 0)
           .map((jv) => ({
@@ -270,7 +421,8 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
       }
       return data;
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      toast.success(result?.message || (mode === 'edit' ? 'MOA updated successfully' : 'MOA created successfully'));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['expense-moas'] }),
         queryClient.invalidateQueries({ queryKey: ['admin-moa-detail'] }),
@@ -280,14 +432,37 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
       ]);
       onSuccess?.();
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong');
+    },
   });
+
+  const handleSave = () => {
+    setSubmitAttempted(true);
+
+    if (!isValid) {
+      if (locations.length === 0) {
+        setError('Please select at least one location.');
+      } else if (locations.some(hasLocationErrors)) {
+        setError('Please complete all required fields for each selected location.');
+      } else {
+        setError('');
+      }
+
+      toast.error('Please complete all required fields.');
+      return;
+    }
+
+    setError('');
+    mutation.mutate();
+  };
 
   const footer = (
     <>
       <Button variant="outline" onClick={onCancel}>
         Cancel
       </Button>
-      <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !isValid}>
+      <Button onClick={handleSave} disabled={mutation.isPending}>
         {mode === 'edit' ? 'Save Changes' : 'Create'}
       </Button>
     </>
@@ -304,64 +479,26 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
         )}
       >
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">MOA Name</label>
-          <Input value={moaName} onChange={(e) => setMoaName(e.target.value)} placeholder="MOA Name" />
+          <label className="text-sm font-medium text-foreground">
+            MOA Name <span className="text-destructive">*</span>
+          </label>
+          <Input value={moaName} onChange={(e) => setMoaName(e.target.value)} placeholder="MOA Name" aria-invalid={!!moaNameError} />
+          {moaNameError && <p className="text-sm text-destructive">{moaNameError}</p>}
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium">Locations</p>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="outline" className="h-10 w-full justify-between rounded-xl text-left font-normal">
-                <span className={cn('truncate', locations.length === 0 && 'text-muted-foreground')}>
-                  {locations.length > 0 ? `${locations.length} selected` : 'Select locations'}
-                </span>
-                <ChevronsUpDown className="ml-2 size-4 shrink-0 text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-
-            <PopoverContent className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl p-2" align="start">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={locationSearch}
-                  onChange={(event) => setLocationSearch(event.target.value)}
-                  placeholder="Search locations..."
-                  className="h-9 rounded-xl pl-9 text-sm"
-                />
-              </div>
-
-              <div className="max-h-72 space-y-1 overflow-y-auto">
-                {filteredLocationOptions.length > 0 ? (
-                  filteredLocationOptions.map((location) => {
-                    const locationName = location.cLocation.trim();
-                    const selected = selectedLocationNames.has(locationName.toLowerCase());
-
-                    return (
-                      <button
-                        key={location.id}
-                        type="button"
-                        onClick={() => toggleLocation(location)}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-muted',
-                          selected && 'bg-muted text-foreground'
-                        )}
-                      >
-                        <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-background">
-                          {selected && <Check className="size-3.5" />}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate" title={locationName}>
-                          {locationName}
-                        </span>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <p className="px-3 py-4 text-center text-sm text-muted-foreground">No locations found.</p>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
+          <p className="text-sm font-medium">
+            Locations <span className="text-destructive">*</span>
+          </p>
+          <CheckboxMultiSelect
+            options={locationMultiSelectOptions}
+            value={selectedLocationValues}
+            onChange={handleLocationSelectChange}
+            placeholder="Select locations"
+            searchPlaceholder="Search locations..."
+            emptyMessage="No locations found."
+          />
+          {locationSelectionError && <p className="text-sm text-destructive">{locationSelectionError}</p>}
         </div>
 
         {pageLayout && <div className="flex flex-wrap gap-2 lg:justify-end">{footer}</div>}
@@ -409,6 +546,7 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">No locations selected.</div>
           )}
+          {selectedLocationsError && <p className="mt-2 text-sm text-destructive">{selectedLocationsError}</p>}
         </div>
 
         {activeLocation && activeTotals ? (
@@ -427,41 +565,80 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
 
             <div className={cn('grid gap-4', pageLayout && 'xl:grid-cols-2')}>
               <div className="space-y-2 rounded-xl border border-border bg-background p-4">
-                <p className="text-sm font-medium">Report Group</p>
+                <p className="text-sm font-medium">
+                  Report Group <span className="text-destructive">*</span>
+                </p>
                 <Input
+                  list={reportGroupOptionsId}
                   value={activeLocation.report_group ?? ''}
-                  onChange={(e) => updateLocationReportGroup(activeLocation.name, e.target.value)}
+                  onChange={(e) => updateLocationField(activeLocation.name, 'report_group', e.target.value)}
                   placeholder="Enter report group"
+                  aria-invalid={!!activeLocationErrors?.report_group}
                 />
+                <datalist id={reportGroupOptionsId}>
+                  {uniqueReportGroups.map((reportGroup) => (
+                    <option key={reportGroup} value={reportGroup} />
+                  ))}
+                </datalist>
+                {activeLocationErrors?.report_group && <p className="text-sm text-destructive">{activeLocationErrors.report_group}</p>}
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-border bg-background p-4">
+                <p className="text-sm font-medium">
+                  Group Name <span className="text-destructive">*</span>
+                </p>
+                <Input
+                  list={groupNameOptionsId}
+                  value={activeLocation.group_name ?? ''}
+                  onChange={(e) => updateLocationField(activeLocation.name, 'group_name', e.target.value)}
+                  placeholder="Enter group name"
+                  aria-invalid={!!activeLocationErrors?.group_name}
+                />
+                <datalist id={groupNameOptionsId}>
+                  {uniqueGroupNames.map((groupName) => (
+                    <option key={groupName} value={groupName} />
+                  ))}
+                </datalist>
+                {activeLocationErrors?.group_name && <p className="text-sm text-destructive">{activeLocationErrors.group_name}</p>}
               </div>
 
               <div className="space-y-3 rounded-xl border border-border bg-background p-4">
                 <p className="text-sm font-medium">Management Fee</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">UNAI Management Fee</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      UNAI Management Fee <span className="text-destructive">*</span>
+                    </label>
                     <Input
                       type="number"
                       min="0"
                       step="0.01"
                       placeholder="UNAI fee"
                       className="text-right"
-                      value={activeManagementFees.unai}
-                      onChange={(event) => updateManagementFee(activeLocation.name, 'unai', event.target.value)}
+                      value={activeLocation.unai_management_fee ?? ''}
+                      onChange={(event) => updateLocationField(activeLocation.name, 'unai_management_fee', event.target.value)}
+                      aria-invalid={!!activeLocationErrors?.unai_management_fee}
                     />
+                    {activeLocationErrors?.unai_management_fee && (
+                      <p className="text-sm text-destructive">{activeLocationErrors.unai_management_fee}</p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">JV Management Fee</label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      JV Management Fee <span className="text-destructive">*</span>
+                    </label>
                     <Input
                       type="number"
                       min="0"
                       step="0.01"
                       placeholder="JV fee"
                       className="text-right"
-                      value={activeManagementFees.jv}
-                      onChange={(event) => updateManagementFee(activeLocation.name, 'jv', event.target.value)}
+                      value={activeLocation.jv_management_fee ?? ''}
+                      onChange={(event) => updateLocationField(activeLocation.name, 'jv_management_fee', event.target.value)}
+                      aria-invalid={!!activeLocationErrors?.jv_management_fee}
                     />
+                    {activeLocationErrors?.jv_management_fee && <p className="text-sm text-destructive">{activeLocationErrors.jv_management_fee}</p>}
                   </div>
                 </div>
               </div>
@@ -470,10 +647,13 @@ export default function MoaForm({ mode, editData, onCancel, onSuccess, layout = 
             <div className="space-y-3 rounded-xl border border-border bg-background p-4">
               <p className="text-sm font-medium">JV Share</p>
 
-              <JVComboSelect
+              <CheckboxMultiSelect
                 options={jvOptions}
                 value={activeLocation.jv_users.map((jv) => jv.id)}
                 onChange={(ids) => updateLocationJVUsers(activeLocation.name, ids)}
+                placeholder="Select JV users"
+                searchPlaceholder="Search JV users..."
+                emptyMessage="No JV users found."
               />
 
               <div className={cn('space-y-2 overflow-y-auto', pageLayout ? 'max-h-80' : 'max-h-60')}>

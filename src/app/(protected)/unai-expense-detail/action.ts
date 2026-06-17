@@ -27,9 +27,12 @@ export type Expense = {
   realizedExpense?: number | string | null;
 };
 
+type ExpenseSourceHashRow = Pick<Expense, 'cCompanyID' | 'cTranNo' | 'cAcctNo' | 'cTitle' | 'cLocation' | 'cGroupName' | 'nAmount' | 'dCreateDate'>;
+
 export type SavedExpense = {
   id: number;
-  invoice_id: string;
+  source_hash?: string | null;
+  transaction_no: string;
   amount: number | null;
   user_id: number | null;
   date_created?: string | null;
@@ -45,15 +48,97 @@ export type SavedExpenseMap = Record<string, SavedExpense>;
 
 export type ExpenseRow = Expense & {
   rowKey: string;
+  sourceHash: string;
 };
 
-export async function fetchSavedExpenses(transactionIds: string[]) {
-  if (!transactionIds.length) return {};
+function sourceStringValue(row: Partial<ExpenseSourceHashRow>, key: keyof ExpenseSourceHashRow) {
+  const value = row[key];
+
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value).trim();
+}
+
+function sourceAmountValue(row: Partial<ExpenseSourceHashRow>, key: keyof ExpenseSourceHashRow) {
+  const value = sourceStringValue(row, key);
+
+  if (value === '') {
+    return '';
+  }
+
+  const normalized = value.replaceAll(',', '');
+  const numericValue = Number(normalized);
+
+  return Number.isFinite(numericValue) ? numericValue.toFixed(2) : value;
+}
+
+function sourceDateValue(row: Partial<ExpenseSourceHashRow>, key: keyof ExpenseSourceHashRow) {
+  const value = sourceStringValue(row, key);
+
+  if (value === '') {
+    return '';
+  }
+
+  const localDateTime = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+
+  if (localDateTime) {
+    return `${localDateTime[1]}-${localDateTime[2]}-${localDateTime[3]} ${localDateTime[4] ?? '00'}:${localDateTime[5] ?? '00'}:${localDateTime[6] ?? '00'}`;
+  }
+
+  const timestamp = Date.parse(value);
+
+  if (Number.isNaN(timestamp)) {
+    return value;
+  }
+
+  const date = new Date(timestamp);
+  const pad = (part: number) => String(part).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+export function getExpenseSourceRow(row: Expense): ExpenseSourceHashRow {
+  return {
+    cCompanyID: row.cCompanyID,
+    cTranNo: row.cTranNo,
+    cAcctNo: row.cAcctNo,
+    cTitle: row.cTitle,
+    cLocation: row.cLocation,
+    cGroupName: row.cGroupName,
+    nAmount: row.nAmount,
+    dCreateDate: row.dCreateDate,
+  };
+}
+
+export async function getExpenseSourceHash(row: ExpenseSourceHashRow) {
+  const basis = {
+    cCompanyID: sourceStringValue(row, 'cCompanyID'),
+    cTranNo: sourceStringValue(row, 'cTranNo'),
+    cAcctNo: sourceStringValue(row, 'cAcctNo'),
+    cTitle: sourceStringValue(row, 'cTitle'),
+    cLocation: sourceStringValue(row, 'cLocation'),
+    cGroupName: sourceStringValue(row, 'cGroupName'),
+    nAmount: sourceAmountValue(row, 'nAmount'),
+    dCreateDate: sourceDateValue(row, 'dCreateDate'),
+  };
+
+  const bytes = new TextEncoder().encode(JSON.stringify(basis));
+  const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export async function fetchSavedExpenses(rows: Expense[]) {
+  if (!rows.length) return {};
 
   const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/expenses/savedExpenses`, {
     method: 'POST',
     body: JSON.stringify({
-      transaction_ids: transactionIds,
+      rows: rows.map(getExpenseSourceRow),
     }),
   });
 
@@ -77,25 +162,37 @@ export async function fetchExpenses(from: string, to: string) {
 
   const erpRows = json.data as Expense[];
 
-  const transactionIds = Array.from(new Set(erpRows.map((row) => row.cTranNo.trim()).filter(Boolean)));
+  const savedExpenseMap = await fetchSavedExpenses(erpRows);
+  const savedExpenseMapUsesSourceHash = Object.values(savedExpenseMap).some((savedExpense) => !!savedExpense.source_hash);
+  const rowsWithHashes = await Promise.all(
+    erpRows.map(async (row) => {
+      const sourceHash = await getExpenseSourceHash(getExpenseSourceRow(row));
+      const savedExpense = savedExpenseMap[sourceHash] ?? (!savedExpenseMapUsesSourceHash ? savedExpenseMap[row.cTranNo.trim()] : undefined);
 
-  const savedExpenseMap = await fetchSavedExpenses(transactionIds);
+      return {
+        ...row,
+        sourceHash,
+        rowKey: sourceHash,
+        realizedExpense: savedExpense?.amount ?? '',
+      };
+    })
+  );
 
-  return erpRows.map((row, index) => ({
-    ...row,
-    rowKey: `${row.cTranNo.trim()}-${row.cleaseContractID?.trim() || ''}-${index}`,
-    realizedExpense: savedExpenseMap[row.cTranNo.trim()]?.amount ?? '',
-  })) as ExpenseRow[];
+  return rowsWithHashes as ExpenseRow[];
 }
 
 export async function saveRealizedExpenses(rows: ExpenseRow[], moaSharedId?: number | null) {
   const payloadRows = rows
     .filter((row) => row.realizedExpense !== '' && row.realizedExpense !== null && row.realizedExpense !== undefined)
-    .map(({ realizedExpense, rowKey, ...row }) => {
+    .map(({ realizedExpense, rowKey, sourceHash, ...row }) => {
       void rowKey;
+      const sourceRow = { ...row } as Record<string, unknown>;
+
+      delete sourceRow.remarks;
 
       return {
-        ...row,
+        ...sourceRow,
+        source_hash: sourceHash,
         moa_shared_id: moaSharedId ?? null,
         realized_expense: Number(realizedExpense),
       };

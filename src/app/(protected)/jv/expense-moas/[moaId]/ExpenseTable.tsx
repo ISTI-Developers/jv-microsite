@@ -14,9 +14,11 @@ type Props = {
   addRow: (locId: number, catId: string | number) => void;
   deleteRow: (locId: number, catId: string | number, index: number) => void;
   updateCell: (locId: number, catId: string | number, index: number, field: keyof BaseExpenseItem, value: string) => void;
+  submitAttempted: boolean;
+  rowValidationErrors: Record<string, Partial<Record<'due_date_from' | 'due_date_to' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>>;
 };
 
-export default function ExpenseTable({ locId, catId, catName, rows, addRow, deleteRow, updateCell }: Props) {
+export default function ExpenseTable({ locId, catId, catName, rows, addRow, deleteRow, updateCell, submitAttempted, rowValidationErrors }: Props) {
   const totalAmount = useMemo(() => {
     return rows.reduce((sum, row) => {
       const amount = Number(row.amount) || 0;
@@ -24,7 +26,7 @@ export default function ExpenseTable({ locId, catId, catName, rows, addRow, dele
     }, 0);
   }, [rows]);
 
-  const columns = getExpenseTableColumns({ locId, catId, deleteRow, updateCell });
+  const columns = getExpenseTableColumns({ locId, catId, deleteRow, updateCell, submitAttempted, rowValidationErrors });
 
   return (
     <div className="space-y-4 rounded-3xl border border-border bg-card p-4 shadow-sm">

@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api';
 import { Users } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { User } from './users.type';
 import DataTable from '../components/DataTable';
 import UserProfileModal from './UserProfileModal';
@@ -21,10 +22,13 @@ export default function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [inviteRole, setInviteRole] = useState<number>(Roles.JOINT_VENTURE);
+  const [inviteSubmitAttempted, setInviteSubmitAttempted] = useState(false);
   const roleItems = [
     { label: 'Admin', value: String(Roles.ADMIN) },
     { label: 'Joint Venture', value: String(Roles.JOINT_VENTURE) },
   ];
+  const inviteEmailMissing = inviteSubmitAttempted && !inviteEmail.trim();
+  const inviteRoleMissing = inviteSubmitAttempted && !inviteRole;
   const {
     data: users,
     isLoading,
@@ -59,11 +63,10 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      alert('Temporary password sent.');
+      toast.success('Temporary password sent.');
     },
     onError: (mutationError) => {
-      if (mutationError instanceof Error) alert(mutationError.message);
-      else alert('Something went wrong');
+      toast.error(mutationError instanceof Error ? mutationError.message : 'Something went wrong');
     },
   });
 
@@ -83,27 +86,40 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      alert('Invitation sent successfully.');
+      toast.success('Invitation sent successfully.');
       setOpenInvite(false);
       setInviteEmail('');
+      setInviteSubmitAttempted(false);
     },
     onError: (mutationError) => {
-      if (mutationError instanceof Error) alert(mutationError.message);
-      else alert('Something went wrong');
+      toast.error(mutationError instanceof Error ? mutationError.message : 'Something went wrong');
     },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ userId, status }: { userId: number; status: 0 | 1 }) =>
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/toggle-status`, {
+    mutationFn: async ({ userId, status }: { userId: number; status: 0 | 1 }) => {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/toggle-status`, {
         method: 'POST',
         body: JSON.stringify({
           user_id: userId,
           status,
         }),
-      }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update user status');
+      }
+
+      return data;
+    },
     onSuccess: () => {
+      toast.success('User status updated');
       queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (mutationError) => {
+      toast.error(mutationError instanceof Error ? mutationError.message : 'Something went wrong');
     },
   });
 
@@ -113,8 +129,10 @@ export default function UsersPage() {
   };
 
   const handleInvite = () => {
-    if (!inviteEmail.trim()) {
-      alert('Email is required');
+    setInviteSubmitAttempted(true);
+
+    if (!inviteEmail.trim() || !inviteRole) {
+      toast.error('Please fill in all required fields.');
       return;
     }
 
@@ -147,7 +165,14 @@ export default function UsersPage() {
         subtitle="Manage users and invitations"
         icon={Users}
         actions={
-          <Button variant="outline" size="sm" onClick={() => setOpenInvite(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setInviteSubmitAttempted(false);
+              setOpenInvite(true);
+            }}
+          >
             Invite User
           </Button>
         }
@@ -166,12 +191,21 @@ export default function UsersPage() {
 
       <AppModal
         open={openInvite}
-        onClose={() => setOpenInvite(false)}
+        onClose={() => {
+          setOpenInvite(false);
+          setInviteSubmitAttempted(false);
+        }}
         title="Invite User"
         maxWidth="sm"
         footer={
           <>
-            <Button variant="outline" onClick={() => setOpenInvite(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpenInvite(false);
+                setInviteSubmitAttempted(false);
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={handleInvite} disabled={inviteMutation.isPending}>
@@ -183,18 +217,26 @@ export default function UsersPage() {
         <div className="flex flex-col gap-4 pt-1">
           <div className="space-y-2">
             <label htmlFor="invite-email" className="text-sm font-medium">
-              Email
+              Email <span className="text-destructive">*</span>
             </label>
-            <Input id="invite-email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="h-10" />
+            <Input
+              id="invite-email"
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              className="h-10"
+              aria-invalid={inviteEmailMissing}
+            />
+            {inviteEmailMissing && <p className="text-sm text-destructive">Email is required.</p>}
           </div>
 
           <div className="space-y-2">
             <label htmlFor="invite-role" className="text-sm font-medium">
-              Role
+              Role <span className="text-destructive">*</span>
             </label>
 
             <Select value={String(inviteRole)} onValueChange={(value) => setInviteRole(Number(value))}>
-              <SelectTrigger id="invite-role" className="h-10 w-full rounded-lg">
+              <SelectTrigger id="invite-role" className="h-10 w-full rounded-lg" aria-invalid={inviteRoleMissing}>
                 <SelectValue />
               </SelectTrigger>
 
@@ -210,6 +252,7 @@ export default function UsersPage() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            {inviteRoleMissing && <p className="text-sm text-destructive">Role is required.</p>}
           </div>
         </div>
       </AppModal>

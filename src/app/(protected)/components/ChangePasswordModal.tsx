@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import AppModal from './AppModal';
 import { Button } from '@/components/ui/button';
@@ -20,8 +21,20 @@ export default function ChangePasswordModal({ open, onClose, forced = false }: P
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const currentPasswordMissing = submitAttempted && !currentPassword.trim();
+  const newPasswordMissing = submitAttempted && !newPassword.trim();
 
   const handleSubmit = async () => {
+    setSubmitAttempted(true);
+
+    if (!currentPassword.trim() || !newPassword.trim()) {
+      setError('Please fill in all required fields.');
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -52,12 +65,15 @@ export default function ChangePasswordModal({ open, onClose, forced = false }: P
         throw new Error('Failed');
       }
 
-      logout();
+      toast.success('Password changed successfully. Please log in again.');
+      await logout();
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
+        toast.error(err.message);
       } else {
         setError('Something went wrong');
+        toast.error('Something went wrong');
       }
     } finally {
       setLoading(false);
@@ -95,16 +111,30 @@ export default function ChangePasswordModal({ open, onClose, forced = false }: P
 
         <div className="space-y-2">
           <label htmlFor="current-password" className="text-sm font-medium">
-            Current Password
+            Current Password <span className="text-destructive">*</span>
           </label>
-          <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          <Input
+            id="current-password"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            aria-invalid={currentPasswordMissing}
+          />
+          {currentPasswordMissing && <p className="text-sm text-destructive">Current password is required.</p>}
         </div>
 
         <div className="space-y-2">
           <label htmlFor="new-password" className="text-sm font-medium">
-            New Password
+            New Password <span className="text-destructive">*</span>
           </label>
-          <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <Input
+            id="new-password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            aria-invalid={newPasswordMissing}
+          />
+          {newPasswordMissing && <p className="text-sm text-destructive">New password is required.</p>}
         </div>
       </div>
     </AppModal>

@@ -163,7 +163,14 @@ export default function ExpenseListPage() {
         {groupSearch && filteredGroupTabs.length === 0 && <p className="mt-3 text-xs text-muted-foreground">No matching group names found.</p>}
       </div>
 
-      <DataTable rows={displayedRows} columns={columns} getRowKey={(row) => row.id} loading={isFetching} pagination paginationMode="frontend" />
+      <DataTable
+        rows={displayedRows}
+        columns={columns}
+        getRowKey={(row) => row.external_key}
+        loading={isFetching}
+        pagination
+        paginationMode="frontend"
+      />
     </div>
   );
 }

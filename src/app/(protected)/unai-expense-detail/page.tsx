@@ -16,6 +16,35 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { apiFetch } from '@/lib/api';
+
+type AccountTitle = {
+  account_no: string;
+  account_title: string;
+  is_enabled: 0 | 1 | boolean;
+};
+
+type AccountTitlesResponse = {
+  success: boolean;
+  data: AccountTitle[];
+  error?: string;
+  message?: string;
+};
+
+const isAccountEnabled = (item: AccountTitle) => Number(item.is_enabled) === 1;
+const normalizeAccountNo = (value: unknown) => String(value ?? '').trim();
+const normalizeRealizedExpenseValue = (value: unknown) => {
+  const trimmedValue = String(value ?? '').trim();
+
+  if (!trimmedValue) return '';
+
+  const normalizedNumber = Number(trimmedValue);
+  if (Number.isFinite(normalizedNumber)) {
+    return normalizedNumber.toString();
+  }
+
+  return trimmedValue;
+};
 
 export default function ExpensePage() {
   const today = dayjs();
@@ -30,6 +59,7 @@ export default function ExpensePage() {
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
   const [groupSearch, setGroupSearch] = useState('');
   const [openTitleGroups, setOpenTitleGroups] = useState<string[]>([]);
+  const [originalRealizedExpenseByRowKey, setOriginalRealizedExpenseByRowKey] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const selectedFrom = range?.from;
   const selectedTo = range?.to;
@@ -43,17 +73,57 @@ export default function ExpensePage() {
     gcTime: 10 * 60 * 1000,
   });
 
+  const {
+    data: accountTitles = [],
+    isLoading: accountTitlesLoading,
+    isError: accountTitlesIsError,
+    error: accountTitlesError,
+  } = useQuery<AccountTitle[]>({
+    queryKey: ['master-account-titles'],
+    queryFn: async () => {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/master-list/account-titles`);
+      const json = (await res.json()) as AccountTitlesResponse;
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || json.message || 'Failed to fetch account titles');
+      }
+
+      return json.data;
+    },
+  });
+
   useEffect(() => {
     if (data) {
       setRows(data);
+      setOriginalRealizedExpenseByRowKey(
+        data.reduce<Record<string, string>>((acc, row) => {
+          acc[row.rowKey] = normalizeRealizedExpenseValue(row.realizedExpense);
+          return acc;
+        }, {})
+      );
       setSelectedGroupName(null);
       setGroupSearch('');
       setOpenTitleGroups([]);
     }
   }, [data]);
 
+  const enabledAccountNos = useMemo(() => {
+    return new Set(
+      accountTitles
+        .filter(isAccountEnabled)
+        .map((item) => normalizeAccountNo(item.account_no))
+        .filter(Boolean)
+    );
+  }, [accountTitles]);
+
+  const visibleRows = useMemo(() => {
+    if (accountTitlesLoading || accountTitlesIsError) return [];
+
+    return rows.filter((row) => enabledAccountNos.has(normalizeAccountNo(row.cAcctNo)));
+  }, [accountTitlesIsError, accountTitlesLoading, enabledAccountNos, rows]);
+
   const groupedRows = useMemo(() => {
-    return rows.reduce<Record<string, ExpenseRow[]>>((acc, row) => {
+    return visibleRows.reduce<Record<string, ExpenseRow[]>>((acc, row) => {
       const groupName = row.cGroupName?.trim() || 'Ungrouped';
 
       if (!acc[groupName]) {
@@ -64,9 +134,16 @@ export default function ExpensePage() {
 
       return acc;
     }, {});
-  }, [rows]);
+  }, [visibleRows]);
 
   const groupTabs = useMemo(() => Object.keys(groupedRows).sort((a, b) => a.localeCompare(b)), [groupedRows]);
+
+  useEffect(() => {
+    if (selectedGroupName && !groupTabs.includes(selectedGroupName)) {
+      setSelectedGroupName(null);
+      setOpenTitleGroups([]);
+    }
+  }, [groupTabs, selectedGroupName]);
 
   const filteredGroupTabs = useMemo(() => {
     const search = groupSearch.trim().toLowerCase();
@@ -80,11 +157,11 @@ export default function ExpensePage() {
 
   const displayedRows = useMemo(() => {
     if (!selectedGroupName) {
-      return rows;
+      return visibleRows;
     }
 
     return groupedRows[selectedGroupName] || [];
-  }, [groupedRows, rows, selectedGroupName]);
+  }, [groupedRows, selectedGroupName, visibleRows]);
 
   const titleGroupedRows = useMemo(() => {
     return displayedRows.reduce<Record<string, ExpenseRow[]>>((acc, row) => {
@@ -101,6 +178,15 @@ export default function ExpensePage() {
   }, [displayedRows]);
 
   const titleGroups = useMemo(() => Object.keys(titleGroupedRows).sort((a, b) => a.localeCompare(b)), [titleGroupedRows]);
+
+  const changedVisibleRows = useMemo(() => {
+    return visibleRows.filter((row) => {
+      const originalValue = originalRealizedExpenseByRowKey[row.rowKey] ?? '';
+      const currentValue = normalizeRealizedExpenseValue(row.realizedExpense);
+
+      return currentValue !== originalValue;
+    });
+  }, [originalRealizedExpenseByRowKey, visibleRows]);
 
   const handleSearch = () => {
     if (!range?.from || !range?.to) return;
@@ -121,12 +207,23 @@ export default function ExpensePage() {
   const columns = useMemo(() => getExpenseColumns(setRows), []);
 
   const handleSave = async () => {
+    if (changedVisibleRows.length === 0) return;
+
     try {
       setIsSaving(true);
 
-      const result = await saveRealizedExpenses(rows, null);
+      const result = await saveRealizedExpenses(changedVisibleRows, null);
 
       toast.success(result?.message || 'Realized expenses saved successfully');
+      setOriginalRealizedExpenseByRowKey((current) => {
+        const updated = { ...current };
+
+        changedVisibleRows.forEach((row) => {
+          updated[row.rowKey] = normalizeRealizedExpenseValue(row.realizedExpense);
+        });
+
+        return updated;
+      });
     } catch (err) {
       if (err instanceof Error) {
         toast.error(err.message);
@@ -138,7 +235,11 @@ export default function ExpensePage() {
     }
   };
 
-  const hasExpenseInput = rows.some((row) => row.realizedExpense !== '' && row.realizedExpense !== null && row.realizedExpense !== undefined);
+  const hasExpenseChanges = changedVisibleRows.length > 0;
+  const realizedExpenseChangeCount = changedVisibleRows.length;
+  const accountTitleFilterPending = rows.length > 0 && accountTitlesLoading;
+  const accountTitleFilterFailed = rows.length > 0 && accountTitlesIsError;
+  const noEnabledAccountTitlesForRows = rows.length > 0 && !accountTitlesLoading && !accountTitlesIsError && visibleRows.length === 0;
 
   return (
     <div className="space-y-4">
@@ -274,7 +375,7 @@ export default function ExpensePage() {
                 {isFetching ? <LoaderCircle className="size-4 animate-spin" /> : 'Search'}
               </Button>
 
-              <Button onClick={handleSave} disabled={isSaving || isFetching || !hasExpenseInput} className="h-10 rounded-xl px-5">
+              <Button onClick={handleSave} disabled={isSaving || isFetching || !hasExpenseChanges} className="h-10 rounded-xl px-5">
                 {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : 'Save'}
               </Button>
             </div>
@@ -284,7 +385,7 @@ export default function ExpensePage() {
             <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="text-xs text-muted-foreground">
                 <p>
-                  Showing {displayedRows.length} of {rows.length} rows
+                  Showing {displayedRows.length} of {visibleRows.length} enabled rows
                 </p>
                 {selectedGroupName && <p className="truncate lg:max-w-[24rem]">Selected group: {selectedGroupName}</p>}
               </div>
@@ -324,7 +425,7 @@ export default function ExpensePage() {
                     : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
-                All ({rows.length})
+                All ({visibleRows.length})
               </button>
 
               <Button
@@ -401,7 +502,7 @@ export default function ExpensePage() {
                     rows={titleRows}
                     columns={columns}
                     getRowKey={(row) => row.rowKey}
-                    loading={isFetching}
+                    loading={isFetching || accountTitlesLoading}
                     pagination
                     paginationMode="frontend"
                   />
@@ -412,11 +513,51 @@ export default function ExpensePage() {
         </Accordion>
       ) : (
         <div className="rounded-3xl border border-border bg-card p-6 text-sm text-muted-foreground shadow-sm">
-          {isFetching ? (
-            <DataTable rows={[]} columns={columns} getRowKey={(row) => row.rowKey} loading={isFetching} pagination paginationMode="frontend" />
+          {isFetching || accountTitleFilterPending ? (
+            <DataTable
+              rows={[]}
+              columns={columns}
+              getRowKey={(row) => row.rowKey}
+              loading={isFetching || accountTitlesLoading}
+              pagination
+              paginationMode="frontend"
+            />
+          ) : accountTitleFilterFailed ? (
+            `Enabled account titles could not be loaded${accountTitlesError instanceof Error ? `: ${accountTitlesError.message}` : '.'}`
+          ) : noEnabledAccountTitlesForRows ? (
+            <div>
+              <p>No enabled account titles available for the selected date range.</p>
+              <p className="mt-1 text-xs">Enable account titles from Master List to show expense details here.</p>
+            </div>
           ) : (
             'No expenses found.'
           )}
+        </div>
+      )}
+
+      {(hasExpenseChanges || isSaving || isFetching) && (
+        <div className="sticky bottom-4 z-10 rounded-3xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Realized expense changes</p>
+              <p className="text-sm text-muted-foreground">
+                {hasExpenseChanges
+                  ? `${realizedExpenseChangeCount} realized expense change${realizedExpenseChangeCount === 1 ? '' : 's'} ready to save`
+                  : 'Enter realized expense values to enable saving'}
+              </p>
+            </div>
+
+            <Button onClick={handleSave} disabled={isSaving || isFetching || !hasExpenseChanges} className="h-10 rounded-xl px-5">
+              {isSaving ? (
+                <span className="flex items-center gap-2">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                'Save Realized Expenses'
+              )}
+            </Button>
+          </div>
         </div>
       )}
     </div>

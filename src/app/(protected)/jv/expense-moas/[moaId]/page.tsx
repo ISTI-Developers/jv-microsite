@@ -8,16 +8,18 @@ import { Category, ExpenseItem, MoaData } from '../../../../types/moa';
 import { ExpensePayload } from './moaId.types';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Layers, LoaderCircle, MapPin, ReceiptText, WalletCards } from 'lucide-react';
-import JVComboSelect from '@/app/(protected)/components/jvComboSelect';
+import CheckboxMultiSelect from '@/app/(protected)/components/CheckboxMultiSelect';
 import { toast } from 'sonner';
 import GTabs from '@/app/(protected)/components/GTabs';
 import ExpenseTable from './ExpenseTable';
 import PageHeader from '../../../components/PageHeader';
 
-type EditableExpenseItem = ExpenseItem & {
+type EditableExpenseItem = Omit<ExpenseItem, 'amount'> & {
+  amount: number | string;
   _tempId?: string;
 };
 
+type ExpenseRowValidationErrors = Partial<Record<'due_date_from' | 'due_date_to' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>;
 type ApiMasterAccountTitle = {
   id: number;
   account_no: string;
@@ -35,6 +37,7 @@ export default function JVExpenseMoaDetailPage() {
   const [tabIndex, setTabIndex] = useState(0);
   const [expenses, setExpenses] = useState<EditableExpensesMap>({});
   const [selectedAccountsByLoc, setSelectedAccountsByLoc] = useState<SelectedAccountsByLoc>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const tempIdRef = useRef(0);
 
   const makeTempId = useCallback(() => {
@@ -126,6 +129,98 @@ export default function JVExpenseMoaDetailPage() {
     return data.locations.filter((loc) => data.allowed_locations?.includes(loc.id));
   }, [data]);
 
+  const activeLocation = visibleLocations[tabIndex] ?? null;
+  const selectedIds = activeLocation ? currentSelectedAccountsByLoc[activeLocation.id] || [] : [];
+  const selectedCats = categories.filter((c) => selectedIds.includes(c.id));
+
+  const getRowKey = (row: EditableExpenseItem) => row._tempId ?? `db-${row.id}`;
+
+  const isNonEmpty = (value: unknown) => String(value ?? '').trim().length > 0;
+
+  const isBlank = (value: unknown) => value === null || value === undefined || (typeof value === 'string' && value.trim().length === 0);
+
+  const isExpenseRowEmpty = (row: EditableExpenseItem) => {
+    return (
+      isBlank(row.due_date_from) &&
+      isBlank(row.due_date_to) &&
+      isBlank(row.ref_no) &&
+      isBlank(row.payee) &&
+      isBlank(row.particulars) &&
+      isBlank(row.amount)
+    );
+  };
+
+  const getCurrentSaveableRows = () => {
+    if (!activeLocation) return [];
+
+    return selectedIds.flatMap((accountId) => currentExpenses[activeLocation.id]?.[String(accountId)] ?? []).filter((row) => !isExpenseRowEmpty(row));
+  };
+
+  const getAmountError = (value: EditableExpenseItem['amount']) => {
+    const rawValue = String(value ?? '').trim();
+
+    if (!rawValue) return 'Amount is required.';
+
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue)) return 'Amount must be a valid number.';
+    if (numericValue <= 0) return 'Amount must be greater than 0.';
+
+    return null;
+  };
+
+  const validateExpenseRow = (row: EditableExpenseItem): ExpenseRowValidationErrors => {
+    if (isExpenseRowEmpty(row)) {
+      return {};
+    }
+
+    const errors: ExpenseRowValidationErrors = {};
+
+    if (!isNonEmpty(row.due_date_from)) {
+      errors.due_date_from = 'Due date from is required.';
+    }
+
+    if (!isNonEmpty(row.due_date_to)) {
+      errors.due_date_to = 'Due date to is required.';
+    } else if (isNonEmpty(row.due_date_from) && String(row.due_date_to) < String(row.due_date_from)) {
+      errors.due_date_to = 'Due date to cannot be earlier than due date from.';
+    }
+
+    if (!isNonEmpty(row.ref_no)) {
+      errors.ref_no = 'Reference no. is required.';
+    }
+
+    if (!isNonEmpty(row.payee)) {
+      errors.payee = 'Payee is required.';
+    }
+
+    if (!isNonEmpty(row.particulars)) {
+      errors.particulars = 'Particulars is required.';
+    }
+
+    const amountError = getAmountError(row.amount);
+    if (amountError) {
+      errors.amount = amountError;
+    }
+
+    return errors;
+  };
+
+  const getExpenseValidationErrors = (rows: EditableExpenseItem[]) => {
+    const errors: Record<string, ExpenseRowValidationErrors> = {};
+
+    rows.forEach((item) => {
+      const rowErrors = validateExpenseRow(item);
+
+      if (Object.keys(rowErrors).length > 0) {
+        errors[getRowKey(item)] = rowErrors;
+      }
+    });
+
+    return errors;
+  };
+
+  const rowValidationErrors = submitAttempted ? getExpenseValidationErrors(getCurrentSaveableRows()) : {};
+
   const updateCell = (locId: number, catId: string | number, index: number, field: keyof ExpenseItem, value: string) => {
     const accountKey = String(catId);
 
@@ -135,7 +230,7 @@ export default function JVExpenseMoaDetailPage() {
 
       const nextRow: EditableExpenseItem = {
         ...rows[index],
-        [field]: field === 'amount' ? Number(value || 0) : value,
+        [field]: value,
       };
 
       if (field === 'due_date_from' && nextRow.due_date_to && value && nextRow.due_date_to < value) {
@@ -171,7 +266,7 @@ export default function JVExpenseMoaDetailPage() {
               _tempId: makeTempId(),
               account_no: accountKey,
               particulars: '',
-              amount: 0,
+              amount: '',
               due_date_from: null,
               due_date_to: null,
               ref_no: '',
@@ -206,23 +301,28 @@ export default function JVExpenseMoaDetailPage() {
     mutationFn: async () => {
       const payload: ExpensePayload[] = [];
 
-      Object.entries(currentExpenses).forEach(([locId, accounts]) => {
-        Object.entries(accounts).forEach(([accountNo, items]) => {
-          items.forEach((item) => {
-            payload.push({
-              id: item.id ?? null,
-              location_id: Number(locId),
-              account_no: item.account_no ?? accountNo,
-              particulars: item.particulars ?? '',
-              amount: Number(item.amount || 0),
-              due_date_from: item.due_date_from ?? null,
-              due_date_to: item.due_date_to ?? null,
-              ref_no: item.ref_no,
-              payee: item.payee,
+      if (activeLocation) {
+        selectedIds.forEach((accountId) => {
+          const accountKey = String(accountId);
+          const items = currentExpenses[activeLocation.id]?.[accountKey] ?? [];
+
+          items
+            .filter((item) => !isExpenseRowEmpty(item))
+            .forEach((item) => {
+              payload.push({
+                id: item.id ?? null,
+                location_id: activeLocation.id,
+                account_no: item.account_no ?? accountKey,
+                particulars: item.particulars ?? '',
+                amount: Number(item.amount || 0),
+                due_date_from: item.due_date_from ?? null,
+                due_date_to: item.due_date_to ?? null,
+                ref_no: item.ref_no,
+                payee: item.payee,
+              });
             });
-          });
         });
-      });
+      }
 
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/jv/expenses/sync`, {
         method: 'POST',
@@ -255,9 +355,17 @@ export default function JVExpenseMoaDetailPage() {
     },
   });
 
-  const activeLocation = visibleLocations[tabIndex] ?? null;
-  const selectedIds = activeLocation ? currentSelectedAccountsByLoc[activeLocation.id] || [] : [];
-  const selectedCats = categories.filter((c) => selectedIds.includes(c.id));
+  const handleSave = () => {
+    setSubmitAttempted(true);
+
+    if (Object.keys(getExpenseValidationErrors(getCurrentSaveableRows())).length > 0) {
+      toast.error('Please complete all required expense row fields.');
+      return;
+    }
+
+    mutation.mutate();
+  };
+
   const selectedRows = activeLocation ? selectedCats.flatMap((cat) => currentExpenses[activeLocation.id]?.[String(cat.id)] || []) : [];
 
   const currentTotalAmount = selectedRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
@@ -405,7 +513,7 @@ export default function JVExpenseMoaDetailPage() {
                   </div>
                 </div>
 
-                <JVComboSelect
+                <CheckboxMultiSelect
                   options={categories.map((c) => ({
                     value: c.id,
                     label: c.name,
@@ -417,7 +525,9 @@ export default function JVExpenseMoaDetailPage() {
                       [activeLocation.id]: vals,
                     }))
                   }
-                  placeholder="Select Account"
+                  placeholder="Select accounts"
+                  searchPlaceholder="Search accounts..."
+                  emptyMessage="No accounts found."
                 />
 
                 {categoriesFetching && (
@@ -458,6 +568,8 @@ export default function JVExpenseMoaDetailPage() {
                     addRow={addRow}
                     deleteRow={deleteRow}
                     updateCell={updateCell}
+                    submitAttempted={submitAttempted}
+                    rowValidationErrors={rowValidationErrors}
                   />
                 );
               })
@@ -485,7 +597,7 @@ export default function JVExpenseMoaDetailPage() {
                 </div>
               </div>
 
-              <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !activeLocation} className="h-10 rounded-xl px-6">
+              <Button onClick={handleSave} disabled={mutation.isPending || !activeLocation} className="h-10 rounded-xl px-6">
                 {mutation.isPending ? (
                   <span className="flex items-center gap-2">
                     <LoaderCircle className="size-4 animate-spin" />

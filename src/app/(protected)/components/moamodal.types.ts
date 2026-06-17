@@ -11,6 +11,9 @@ export type LocationItem = {
   structure_id?: number | null;
   name: string;
   report_group: string;
+  group_name: string;
+  unai_management_fee: string | number;
+  jv_management_fee: string | number;
   jv_users: JVItem[];
 };
 
@@ -27,6 +30,9 @@ export function mapEditLocations(editData?: Moa | null): LocationItem[] {
       structure_id: location.structure_id ?? null,
       name: location.location_name,
       report_group: location.report_group ?? '',
+      group_name: location.group_name ?? '',
+      unai_management_fee: location.unai_management_fee ?? '',
+      jv_management_fee: location.jv_management_fee ?? '',
       jv_users: (location.jv_users ?? []).map((jv) => ({
         id: jv.id,
         share_percentage: jv.share_percentage ?? 0,

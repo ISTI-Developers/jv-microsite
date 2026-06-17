@@ -27,7 +27,7 @@ export default function TransactionLogsPage() {
     reference_table: '',
     reference_no: '',
     moa_id: '',
-    moa_share_id: '',
+    moa_shared_id: '',
     structure_id: '',
     account_no: '',
     performed_by: '',
@@ -66,7 +66,7 @@ export default function TransactionLogsPage() {
       reference_table: '',
       reference_no: '',
       moa_id: '',
-      moa_share_id: '',
+      moa_shared_id: '',
       structure_id: '',
       account_no: '',
       performed_by: '',
@@ -165,9 +165,9 @@ export default function TransactionLogsPage() {
             </label>
             <Input
               id="transaction-moa-share-id"
-              value={filters.moa_share_id}
-              onChange={(e) => updateFilter('moa_share_id', e.target.value)}
-              placeholder="MOA share ID"
+              value={filters.moa_shared_id}
+              onChange={(e) => updateFilter('moa_shared_id', e.target.value)}
+              placeholder="MOA shared ID"
             />
           </div>
 

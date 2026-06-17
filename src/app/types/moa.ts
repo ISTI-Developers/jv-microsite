@@ -2,7 +2,7 @@ export type ID = number;
 
 export type JVUser = {
   id: ID;
-  moa_share_id?: ID;
+  moa_shared_id?: ID;
   email: string;
   company_name: string | null;
   first_name: string | null;
@@ -15,6 +15,9 @@ export type Location = {
   structure_id: number | null;
   location_name: string;
   report_group: string;
+  group_name: string;
+  unai_management_fee: string | number;
+  jv_management_fee: string | number;
   jv_users: JVUser[];
 };
 
@@ -40,7 +43,7 @@ export type ExpenseUser = {
 
 export type ExpenseItem = {
   id?: ID;
-  moa_share_id?: ID;
+  moa_shared_id?: ID;
   user_id?: ID;
   location_id?: ID;
   share_percentage?: number;

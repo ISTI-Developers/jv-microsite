@@ -16,6 +16,19 @@ import { CalendarIcon, ChevronLeft, ChevronRight, HandCoins, LoaderCircle, Searc
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+const normalizeRealizedRevenueValue = (value: unknown) => {
+  const trimmedValue = String(value ?? '').trim();
+
+  if (!trimmedValue) return '';
+
+  const normalizedNumber = Number(trimmedValue);
+  if (Number.isFinite(normalizedNumber)) {
+    return normalizedNumber.toString();
+  }
+
+  return trimmedValue;
+};
+
 export default function RevenuePage() {
   const today = dayjs();
 
@@ -26,6 +39,7 @@ export default function RevenuePage() {
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
   const [groupSearch, setGroupSearch] = useState('');
   const [openTitleGroups, setOpenTitleGroups] = useState<string[]>([]);
+  const [originalRealizedRevenueByRowKey, setOriginalRealizedRevenueByRowKey] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const groupTabsRef = useRef<HTMLDivElement | null>(null);
 
@@ -42,14 +56,22 @@ export default function RevenuePage() {
   useEffect(() => {
     if (data) {
       setRows(data);
+      setOriginalRealizedRevenueByRowKey(
+        data.reduce<Record<string, string>>((acc, row) => {
+          acc[row.rowKey] = normalizeRealizedRevenueValue(row.realizedRevenue);
+          return acc;
+        }, {})
+      );
       setSelectedGroupName(null);
       setGroupSearch('');
       setOpenTitleGroups([]);
     }
   }, [data]);
 
+  const visibleRows = rows;
+
   const groupedRows = useMemo(() => {
-    return rows.reduce<Record<string, RevenueRow[]>>((acc, row) => {
+    return visibleRows.reduce<Record<string, RevenueRow[]>>((acc, row) => {
       const groupName = row.cGroupName?.trim() || 'Ungrouped';
 
       if (!acc[groupName]) {
@@ -60,9 +82,16 @@ export default function RevenuePage() {
 
       return acc;
     }, {});
-  }, [rows]);
+  }, [visibleRows]);
 
   const groupTabs = useMemo(() => Object.keys(groupedRows).sort((a, b) => a.localeCompare(b)), [groupedRows]);
+
+  useEffect(() => {
+    if (selectedGroupName && !groupTabs.includes(selectedGroupName)) {
+      setSelectedGroupName(null);
+      setOpenTitleGroups([]);
+    }
+  }, [groupTabs, selectedGroupName]);
 
   const filteredGroupTabs = useMemo(() => {
     const search = groupSearch.trim().toLowerCase();
@@ -76,11 +105,11 @@ export default function RevenuePage() {
 
   const displayedRows = useMemo(() => {
     if (!selectedGroupName) {
-      return rows;
+      return visibleRows;
     }
 
     return groupedRows[selectedGroupName] || [];
-  }, [groupedRows, rows, selectedGroupName]);
+  }, [groupedRows, selectedGroupName, visibleRows]);
 
   const titleGroupedRows = useMemo(() => {
     return displayedRows.reduce<Record<string, RevenueRow[]>>((acc, row) => {
@@ -97,6 +126,15 @@ export default function RevenuePage() {
   }, [displayedRows]);
 
   const titleGroups = useMemo(() => Object.keys(titleGroupedRows).sort((a, b) => a.localeCompare(b)), [titleGroupedRows]);
+
+  const changedVisibleRows = useMemo(() => {
+    return visibleRows.filter((row) => {
+      const originalValue = originalRealizedRevenueByRowKey[row.rowKey] ?? '';
+      const currentValue = normalizeRealizedRevenueValue(row.realizedRevenue);
+
+      return currentValue !== originalValue;
+    });
+  }, [originalRealizedRevenueByRowKey, visibleRows]);
 
   const handleSearch = () => {
     if (!from || !to) return;
@@ -115,12 +153,23 @@ export default function RevenuePage() {
   };
 
   const handleSave = async () => {
+    if (changedVisibleRows.length === 0) return;
+
     try {
       setIsSaving(true);
 
-      const result = await saveRealizedRevenues(rows, null);
+      const result = await saveRealizedRevenues(changedVisibleRows, null);
 
       toast.success(result?.message || 'Realized revenue saved successfully');
+      setOriginalRealizedRevenueByRowKey((current) => {
+        const updated = { ...current };
+
+        changedVisibleRows.forEach((row) => {
+          updated[row.rowKey] = normalizeRealizedRevenueValue(row.realizedRevenue);
+        });
+
+        return updated;
+      });
     } catch (err) {
       if (err instanceof Error) {
         toast.error(err.message);
@@ -132,7 +181,8 @@ export default function RevenuePage() {
     }
   };
 
-  const hasRevenueInput = rows.some((row) => row.realizedRevenue !== '' && row.realizedRevenue !== null && row.realizedRevenue !== undefined);
+  const hasRevenueChanges = changedVisibleRows.length > 0;
+  const realizedRevenueChangeCount = changedVisibleRows.length;
 
   return (
     <div className="space-y-4">
@@ -262,7 +312,7 @@ export default function RevenuePage() {
                 {isFetching ? <LoaderCircle className="size-4 animate-spin" /> : 'Search'}
               </Button>
 
-              <Button onClick={handleSave} disabled={isSaving || isFetching || !hasRevenueInput} className="h-10 rounded-xl px-5">
+              <Button onClick={handleSave} disabled={isSaving || isFetching || !hasRevenueChanges} className="h-10 rounded-xl px-5">
                 {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : 'Save'}
               </Button>
             </div>
@@ -272,7 +322,7 @@ export default function RevenuePage() {
             <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="text-xs text-muted-foreground">
                 <p>
-                  Showing {displayedRows.length} of {rows.length} rows
+                  Showing {displayedRows.length} of {visibleRows.length} rows
                 </p>
                 {selectedGroupName && <p className="truncate lg:max-w-[24rem]">Selected group: {selectedGroupName}</p>}
               </div>
@@ -312,7 +362,7 @@ export default function RevenuePage() {
                     : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
-                All ({rows.length})
+                All ({visibleRows.length})
               </button>
 
               <Button
@@ -405,6 +455,32 @@ export default function RevenuePage() {
           ) : (
             'No collection rows found.'
           )}
+        </div>
+      )}
+
+      {(hasRevenueChanges || isSaving || isFetching) && (
+        <div className="sticky bottom-4 z-10 rounded-3xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Realized revenue changes</p>
+              <p className="text-sm text-muted-foreground">
+                {hasRevenueChanges
+                  ? `${realizedRevenueChangeCount} realized revenue change${realizedRevenueChangeCount === 1 ? '' : 's'} ready to save`
+                  : 'Enter realized revenue values to enable saving'}
+              </p>
+            </div>
+
+            <Button onClick={handleSave} disabled={isSaving || isFetching || !hasRevenueChanges} className="h-10 rounded-xl px-5">
+              {isSaving ? (
+                <span className="flex items-center gap-2">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                'Save Realized Revenue'
+              )}
+            </Button>
+          </div>
         </div>
       )}
     </div>

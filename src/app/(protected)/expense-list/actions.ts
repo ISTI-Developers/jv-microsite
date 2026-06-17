@@ -2,20 +2,22 @@ import { apiFetch } from '@/lib/api';
 
 export type ExpenseListRow = {
   id: number;
+  external_key: string;
+  source_type: 'JV' | 'UNAI' | string;
+  source_id: number | string;
   moa_shared_id: number | null;
-  user_id: number;
-  invoice_id: string | null;
   account_no: string | null;
-  transaction_no: string | null;
+  user_id: number;
+  ref_no: string | null;
   job_number: string | null;
   due_date_from: string | null;
   due_date_to: string | null;
   structure_id: string | null;
-  site_id: string | null;
-  amount: string | number | null;
-  remarks: string | null;
+  payee: string | null;
+  particulars: string | null;
+  jv_amount: string | number | null;
+  un_amount: string | number | null;
   group_name: string | null;
-  date_created: string | null;
 };
 
 export type ExpenseListResponse = {

@@ -74,7 +74,7 @@ export type TransactionLogRow = {
   reference_table: string | null;
   reference_no: string | null;
   moa_id: string | number | null;
-  moa_share_id: string | number | null;
+  moa_shared_id: string | number | null;
   structure_id: string | number | null;
   account_no: string | number | null;
   amount: string | number | null;
@@ -92,7 +92,7 @@ export type TransactionLogFilters = {
   reference_table?: string;
   reference_no?: string;
   moa_id?: string;
-  moa_share_id?: string;
+  moa_shared_id?: string;
   structure_id?: string;
   account_no?: string;
   performed_by?: string;

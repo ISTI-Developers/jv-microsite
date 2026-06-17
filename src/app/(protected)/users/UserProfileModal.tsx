@@ -5,6 +5,7 @@ import AppModal from '../components/AppModal';
 import { User } from './users.type';
 import { useAuth } from '@/context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,32 +29,50 @@ export default function UserProfileModal({ open, user, onClose, showActivityLogs
   const handleSave = async () => {
     if (!user) return;
 
-    const isSelf = currentUser?.id === user.id;
+    try {
+      const isSelf = currentUser?.id === user.id;
 
-    const endpoint = isSelf ? '/users/update-profile' : '/admin/users/update-profile';
+      const endpoint = isSelf ? '/users/update-profile' : '/admin/users/update-profile';
 
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('session')}`,
-      },
-      body: JSON.stringify({
-        user_id: user.id,
-        first_name: firstName,
-        last_name: lastName,
-        entity_type: entityType,
-        company_name: entityType === 'company' ? companyName : null,
-      }),
-    });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('session')}`,
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          first_name: firstName,
+          last_name: lastName,
+          entity_type: entityType,
+          company_name: entityType === 'company' ? companyName : null,
+        }),
+      });
 
-    if (isSelf) {
-      await refreshUser();
-    } else {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      const text = await res.text();
+      let result: { error?: string; message?: string } | null = null;
+
+      try {
+        result = text ? JSON.parse(text) : null;
+      } catch {
+        result = null;
+      }
+
+      if (!res.ok) {
+        throw new Error(result?.error || result?.message || 'Failed to update profile');
+      }
+
+      if (isSelf) {
+        await refreshUser();
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['users'] });
+      }
+
+      toast.success(result?.message || 'Profile updated successfully');
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update profile');
     }
-
-    onClose();
   };
 
   return (
