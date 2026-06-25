@@ -36,9 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'GET',
         router,
         cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
       });
 
       if (!res.ok) throw new Error();
