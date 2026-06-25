@@ -17,9 +17,23 @@ type Props = {
   updateCell: (locId: number, catId: string | number, index: number, field: keyof BaseExpenseItem, value: string) => void;
   submitAttempted: boolean;
   rowValidationErrors: Record<string, RevenueRowValidationErrors>;
+  emptyTitle?: string;
+  emptyDescription?: string;
 };
 
-export default function RevenueTable({ locId, catId, catName, rows, addRow, deleteRow, updateCell, submitAttempted, rowValidationErrors }: Props) {
+export default function RevenueTable({
+  locId,
+  catId,
+  catName,
+  rows,
+  addRow,
+  deleteRow,
+  updateCell,
+  submitAttempted,
+  rowValidationErrors,
+  emptyTitle = 'No rows yet. Use Add Row to start entering UNAI manual revenue for this account.',
+  emptyDescription,
+}: Props) {
   const totalAmount = useMemo(() => {
     return rows.reduce((sum, row) => {
       const amount = Number(row.amount) || 0;
@@ -46,7 +60,8 @@ export default function RevenueTable({ locId, catId, catName, rows, addRow, dele
 
       {rows.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-background/70 px-4 py-3 text-sm text-muted-foreground">
-          No rows yet. Use Add Row to start entering UNAI manual revenue for this account.
+          <p>{emptyTitle}</p>
+          {emptyDescription ? <p className="mt-1">{emptyDescription}</p> : null}
         </div>
       )}
 
