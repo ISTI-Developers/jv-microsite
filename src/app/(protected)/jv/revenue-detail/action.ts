@@ -7,7 +7,7 @@ export type RevenueList = {
   structure_id: number;
   address: string;
   Customer_Name: string;
-  Product: string;
+  Pruduct: string;
   project: string;
   date_from: string;
   date_to: string;

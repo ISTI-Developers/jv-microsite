@@ -4,7 +4,8 @@ import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import DataTable from '@/app/(protected)/components/DataTable';
 import { ExpenseItem as BaseExpenseItem } from '@/app/types/moa';
-import { EditableExpenseItem, getExpenseTableColumns } from './ExpenseTable.columns';
+import { EditableExpenseItem, ExpenseRowValidationErrors } from './types';
+import { getExpenseTableColumns } from './ExpenseTable.columns';
 
 type Props = {
   locId: number;
@@ -14,11 +15,23 @@ type Props = {
   addRow: (locId: number, catId: string | number) => void;
   deleteRow: (locId: number, catId: string | number, index: number) => void;
   updateCell: (locId: number, catId: string | number, index: number, field: keyof BaseExpenseItem, value: string) => void;
+  updateVoucherCell: (locId: number, catId: string | number, index: number, value: string, voucherValid: boolean) => void;
   submitAttempted: boolean;
-  rowValidationErrors: Record<string, Partial<Record<'due_date' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>>;
+  rowValidationErrors: Record<string, ExpenseRowValidationErrors>;
 };
 
-export default function ExpenseTable({ locId, catId, catName, rows, addRow, deleteRow, updateCell, submitAttempted, rowValidationErrors }: Props) {
+export default function ExpenseTable({
+  locId,
+  catId,
+  catName,
+  rows,
+  addRow,
+  deleteRow,
+  updateCell,
+  updateVoucherCell,
+  submitAttempted,
+  rowValidationErrors,
+}: Props) {
   const totalAmount = useMemo(() => {
     return rows.reduce((sum, row) => {
       const amount = Number(row.amount) || 0;
@@ -26,7 +39,7 @@ export default function ExpenseTable({ locId, catId, catName, rows, addRow, dele
     }, 0);
   }, [rows]);
 
-  const columns = getExpenseTableColumns({ locId, catId, deleteRow, updateCell, submitAttempted, rowValidationErrors });
+  const columns = getExpenseTableColumns({ locId, catId, deleteRow, updateCell, updateVoucherCell, submitAttempted, rowValidationErrors });
 
   return (
     <div className="space-y-4 rounded-3xl border border-border bg-card p-4 shadow-sm">
@@ -45,7 +58,7 @@ export default function ExpenseTable({ locId, catId, catName, rows, addRow, dele
 
       {rows.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-background/70 px-4 py-3 text-sm text-muted-foreground">
-          No rows yet. Use Add Row to start entering expenses for this account.
+          No rows yet. Use Add Row to start entering UNAI manual expenses for this account.
         </div>
       )}
 

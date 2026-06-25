@@ -20,7 +20,12 @@ export function getExpenseColumns(setRows: Dispatch<SetStateAction<ExpenseRow[]>
       sortValue: () => '',
       render: () => 'N/A',
     },
-    { header: 'Lease Contract ID', sortable: true, sortValue: (row) => row.cleaseContractID ?? '', render: (row) => row.cleaseContractID },
+    {
+      header: 'Lease Contract ID',
+      sortable: true,
+      sortValue: (row) => row.cLeaseContractID ?? row.cleaseContractID ?? '',
+      render: (row) => row.cLeaseContractID ?? row.cleaseContractID,
+    },
     {
       header: 'Amount',
       align: 'right',

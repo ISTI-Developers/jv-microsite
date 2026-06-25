@@ -39,8 +39,8 @@ export function getColumns(setRows: Dispatch<SetStateAction<RevenueList[]>>): Co
     {
       header: 'Product',
       sortable: true,
-      sortValue: (row) => row.Product,
-      render: (row) => row.Product || '—',
+      sortValue: (row) => row.Pruduct,
+      render: (row) => row.Pruduct || '—',
     },
     {
       header: 'Project',

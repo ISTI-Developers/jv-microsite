@@ -1,39 +1,24 @@
 import dayjs from 'dayjs';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 import { CalendarIcon, Trash2 } from 'lucide-react';
 import { Column } from '@/app/(protected)/components/DataTable';
 import { ExpenseItem as BaseExpenseItem } from '@/app/types/moa';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { EditableRevenueItem, RevenueRowValidationErrors } from './types';
 
-type UserMeta = {
-  email?: string | null;
-  role_name?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  company_name?: string | null;
-};
-
-export type EditableExpenseItem = Omit<BaseExpenseItem, 'amount'> & {
-  amount: number | string;
-  _tempId?: string;
-  user?: UserMeta;
-};
-
-type ExpenseRowValidationErrors = Partial<Record<'due_date' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>;
-
-type GetExpenseTableColumnsParams = {
+type GetRevenueTableColumnsParams = {
   locId: number;
   catId: string | number;
   deleteRow: (locId: number, catId: string | number, index: number) => void;
   updateCell: (locId: number, catId: string | number, index: number, field: keyof BaseExpenseItem, value: string) => void;
   submitAttempted: boolean;
-  rowValidationErrors: Record<string, ExpenseRowValidationErrors>;
+  rowValidationErrors: Record<string, RevenueRowValidationErrors>;
 };
 
-const getRowKey = (row: EditableExpenseItem) => row._tempId ?? `db-${row.id}`;
+const getRowKey = (row: EditableRevenueItem) => row._tempId ?? `db-${row.id}`;
 
 const FieldError = ({ message }: { message?: string }) => {
   if (!message) return null;
@@ -41,15 +26,15 @@ const FieldError = ({ message }: { message?: string }) => {
   return <p className="mt-1 text-sm text-destructive">{message}</p>;
 };
 
-export function getExpenseTableColumns({
+export function getRevenueTableColumns({
   locId,
   catId,
   deleteRow,
   updateCell,
   submitAttempted,
   rowValidationErrors,
-}: GetExpenseTableColumnsParams): Column<EditableExpenseItem>[] {
-  const getFieldError = (row: EditableExpenseItem, field: keyof ExpenseRowValidationErrors) => {
+}: GetRevenueTableColumnsParams): Column<EditableRevenueItem>[] {
+  const getFieldError = (row: EditableRevenueItem, field: keyof RevenueRowValidationErrors) => {
     if (!submitAttempted) return undefined;
     return rowValidationErrors[getRowKey(row)]?.[field];
   };
@@ -65,16 +50,13 @@ export function getExpenseTableColumns({
       },
       render: (row) => {
         const u = row.user;
-
         const fullName = [u?.last_name, u?.first_name].filter(Boolean).join(', ');
         const fallbackName = u?.email || '-';
 
         return (
           <div className="max-w-[180px] text-xs leading-tight">
             <p className="font-medium">{fullName || fallbackName}</p>
-
             {u?.company_name && <p className="truncate text-muted-foreground">{u.company_name}</p>}
-
             {u?.role_name && (
               <p className={u.role_name === 'ADMIN' ? 'text-xs font-semibold text-red-500' : 'text-muted-foreground'}>
                 {u.role_name === 'ADMIN' ? 'UNAI' : u.role_name}
@@ -124,7 +106,7 @@ export function getExpenseTableColumns({
       },
     },
     {
-      header: 'Ref No',
+      header: 'Ref No.',
       sortable: true,
       sortValue: (row) => row.ref_no ?? '',
       render: (row, index) => {

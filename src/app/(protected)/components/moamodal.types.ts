@@ -9,6 +9,8 @@ export type JVItem = {
 export type LocationItem = {
   id?: number;
   structure_id?: number | null;
+  structure_code?: string | null;
+  selection_value?: string;
   name: string;
   report_group: string;
   group_name: string;

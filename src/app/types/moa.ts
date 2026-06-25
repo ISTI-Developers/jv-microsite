@@ -50,8 +50,9 @@ export type ExpenseItem = {
   account_no: string | number | null;
   particulars: string | null;
   amount: number;
-  due_date_from: string | null;
-  due_date_to: string | null;
+  due_date?: string | null;
+  due_date_from?: string | null;
+  due_date_to?: string | null;
   ref_no: string;
   payee: string;
   date_created?: string;

@@ -4,24 +4,6 @@ import { RevenueListRow } from './actions';
 
 export const columns: Column<RevenueListRow>[] = [
   {
-    header: 'ID',
-    sortable: true,
-    sortValue: (row) => row.id,
-    render: (row) => row.id,
-  },
-  {
-    header: 'MOA Shared ID',
-    sortable: true,
-    sortValue: (row) => row.moa_shared_id ?? 0,
-    render: (row) => row.moa_shared_id ?? '—',
-  },
-  {
-    header: 'User ID',
-    sortable: true,
-    sortValue: (row) => row.user_id,
-    render: (row) => row.user_id,
-  },
-  {
     header: 'Invoice ID',
     sortable: true,
     sortValue: (row) => row.invoice_id ?? '',

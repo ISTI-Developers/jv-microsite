@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import DataTable from '../components/DataTable';
+import GroupTabsFilter from '../components/GroupTabsFilter';
 import { fetchRevenues, RevenueRow, saveRealizedRevenues } from './action';
 import { getRevenueColumns } from './columns';
 
@@ -10,9 +11,8 @@ import dayjs, { Dayjs } from 'dayjs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, ChevronLeft, ChevronRight, HandCoins, LoaderCircle, Search, X } from 'lucide-react';
+import { CalendarIcon, HandCoins, LoaderCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -41,7 +41,6 @@ export default function RevenuePage() {
   const [openTitleGroups, setOpenTitleGroups] = useState<string[]>([]);
   const [originalRealizedRevenueByRowKey, setOriginalRealizedRevenueByRowKey] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
-  const groupTabsRef = useRef<HTMLDivElement | null>(null);
 
   const { data, isFetching, isError } = useQuery({
     queryKey: ['revenues', params],
@@ -145,13 +144,6 @@ export default function RevenuePage() {
     });
   };
 
-  const scrollGroupTabs = (direction: 'left' | 'right') => {
-    groupTabsRef.current?.scrollBy({
-      left: direction === 'left' ? -320 : 320,
-      behavior: 'smooth',
-    });
-  };
-
   const handleSave = async () => {
     if (changedVisibleRows.length === 0) return;
 
@@ -183,6 +175,7 @@ export default function RevenuePage() {
 
   const hasRevenueChanges = changedVisibleRows.length > 0;
   const realizedRevenueChangeCount = changedVisibleRows.length;
+  const hasSearched = !!params;
 
   return (
     <div className="space-y-4">
@@ -318,107 +311,38 @@ export default function RevenuePage() {
             </div>
           </div>
 
-          <div className="border-t border-border pt-3">
-            <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <div className="text-xs text-muted-foreground">
-                <p>
-                  Showing {displayedRows.length} of {visibleRows.length} rows
-                </p>
-                {selectedGroupName && <p className="truncate lg:max-w-[24rem]">Selected group: {selectedGroupName}</p>}
-              </div>
-
-              <div className="relative w-full max-w-sm">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={groupSearch}
-                  onChange={(event) => setGroupSearch(event.target.value)}
-                  placeholder="Search group name..."
-                  className="h-10 rounded-xl bg-background pl-9 pr-10 text-sm"
-                />
-                {groupSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setGroupSearch('')}
-                    aria-label="Clear group search"
-                    className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="size-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex min-w-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedGroupName(null);
-                  setOpenTitleGroups([]);
-                }}
-                className={cn(
-                  'shrink-0 rounded-xl border px-4 py-2 text-sm font-medium transition',
-                  selectedGroupName === null
-                    ? 'border-primary/30 bg-primary text-primary-foreground shadow-sm'
-                    : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-              >
-                All ({visibleRows.length})
-              </button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Scroll group names left"
-                disabled={filteredGroupTabs.length === 0}
-                onClick={() => scrollGroupTabs('left')}
-                className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground hover:text-foreground"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-
-              <div ref={groupTabsRef} className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {filteredGroupTabs.map((groupName) => (
-                  <button
-                    key={groupName}
-                    type="button"
-                    onClick={() => {
-                      setSelectedGroupName(groupName);
-                      setOpenTitleGroups([]);
-                    }}
-                    className={cn(
-                      'max-w-[18rem] shrink-0 truncate rounded-xl border px-4 py-2 text-sm font-medium transition',
-                      selectedGroupName === groupName
-                        ? 'border-primary/30 bg-primary text-primary-foreground shadow-sm'
-                        : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    {groupName} ({groupedRows[groupName]?.length || 0})
-                  </button>
-                ))}
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Scroll group names right"
-                disabled={filteredGroupTabs.length === 0}
-                onClick={() => scrollGroupTabs('right')}
-                className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground hover:text-foreground"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-
-            {groupSearch && filteredGroupTabs.length === 0 && <p className="mt-3 text-xs text-muted-foreground">No matching group names found.</p>}
-          </div>
+          {hasSearched && visibleRows.length > 0 && (
+            <GroupTabsFilter
+              items={filteredGroupTabs.map((groupName) => ({
+                value: groupName,
+                count: groupedRows[groupName]?.length ?? 0,
+              }))}
+              selectedValue={selectedGroupName}
+              onSelectedValueChange={(value) => {
+                setSelectedGroupName(value);
+                setOpenTitleGroups([]);
+              }}
+              searchValue={groupSearch}
+              onSearchValueChange={setGroupSearch}
+              totalCount={visibleRows.length}
+              displayedCount={displayedRows.length}
+              label="group"
+              selectedLabel="Selected group"
+              searchPlaceholder="Search group name..."
+              noResultsMessage="No matching group names found."
+              className="border-t border-border pt-3"
+            />
+          )}
         </div>
       </div>
 
       {isError && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">Failed to load revenue.</div>}
 
-      {titleGroups.length > 0 ? (
+      {!hasSearched ? (
+        <div className="rounded-3xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">
+          Select a date range and click Search to load revenue records.
+        </div>
+      ) : titleGroups.length > 0 ? (
         <Accordion type="multiple" value={openTitleGroups} onValueChange={setOpenTitleGroups} className="space-y-3">
           {titleGroups.map((titleGroup) => {
             const titleRows = titleGroupedRows[titleGroup] || [];

@@ -13,7 +13,8 @@ export type Expense = {
   cDepartment?: string;
   cEmpID?: string;
   cEmpName?: string;
-  cleaseContractID: string;
+  cLeaseContractID?: string | null;
+  cleaseContractID?: string | null;
   cMainRef?: string;
   cRefType?: string;
   cSiteOwnerName?: string;
@@ -192,6 +193,7 @@ export async function saveRealizedExpenses(rows: ExpenseRow[], moaSharedId?: num
 
       return {
         ...sourceRow,
+        cLeaseContractID: row.cLeaseContractID ?? row.cleaseContractID ?? null,
         source_hash: sourceHash,
         moa_shared_id: moaSharedId ?? null,
         realized_expense: Number(realizedExpense),

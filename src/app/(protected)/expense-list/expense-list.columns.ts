@@ -1,4 +1,6 @@
 import dayjs from 'dayjs';
+import { createElement } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Column } from '../components/DataTable';
 import { ExpenseListRow } from './actions';
 
@@ -9,30 +11,37 @@ function formatAmount(value: string | number | null) {
   });
 }
 
+function renderStatus(row: ExpenseListRow) {
+  const status = row.display_status ?? (row.is_realized ? 'Realized' : row.source_type === 'JV' ? 'JV' : 'API');
+  const className =
+    status === 'Realized'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : status === 'JV'
+        ? 'border-blue-200 bg-blue-50 text-blue-700'
+        : 'border-slate-200 bg-slate-50 text-slate-700';
+
+  return createElement(Badge, { variant: 'outline', className }, status);
+}
+
+function renderUnaiAmount(row: ExpenseListRow) {
+  const amount = row.display_amount ?? (row.is_realized ? row.realized_amount : null) ?? row.un_amount;
+
+  if (!row.is_realized) {
+    return formatAmount(amount);
+  }
+
+  return createElement('div', { className: 'space-y-0.5' }, [
+    createElement('div', { key: 'amount', className: 'font-medium text-emerald-700' }, formatAmount(amount)),
+    createElement('div', { key: 'label', className: 'text-xs text-muted-foreground' }, 'Realized DB amount'),
+  ]);
+}
+
 export const columns: Column<ExpenseListRow>[] = [
   {
-    header: 'ID',
+    header: 'Status',
     sortable: true,
-    sortValue: (row) => row.id,
-    render: (row) => row.id,
-  },
-  {
-    header: 'Source',
-    sortable: true,
-    sortValue: (row) => row.source_type ?? '',
-    render: (row) => row.source_type ?? '—',
-  },
-  {
-    header: 'MOA Shared ID',
-    sortable: true,
-    sortValue: (row) => row.moa_shared_id ?? 0,
-    render: (row) => row.moa_shared_id ?? '—',
-  },
-  {
-    header: 'User ID',
-    sortable: true,
-    sortValue: (row) => row.user_id,
-    render: (row) => row.user_id,
+    sortValue: (row) => row.display_status ?? (row.is_realized ? 'Realized' : row.source_type),
+    render: renderStatus,
   },
   {
     header: 'Group Name',
@@ -59,16 +68,10 @@ export const columns: Column<ExpenseListRow>[] = [
     render: (row) => row.job_number ?? '—',
   },
   {
-    header: 'Due Date From',
+    header: 'Due Date',
     sortable: true,
-    sortValue: (row) => (row.due_date_from ? dayjs(row.due_date_from).valueOf() : 0),
-    render: (row) => (row.due_date_from ? dayjs(row.due_date_from).format('MMM DD, YYYY') : '—'),
-  },
-  {
-    header: 'Due Date To',
-    sortable: true,
-    sortValue: (row) => (row.due_date_to ? dayjs(row.due_date_to).valueOf() : 0),
-    render: (row) => (row.due_date_to ? dayjs(row.due_date_to).format('MMM DD, YYYY') : '—'),
+    sortValue: (row) => (row.due_date ? dayjs(row.due_date).valueOf() : 0),
+    render: (row) => (row.due_date ? dayjs(row.due_date).format('MMM DD, YYYY') : '—'),
   },
   {
     header: 'Structure ID',
@@ -99,7 +102,7 @@ export const columns: Column<ExpenseListRow>[] = [
     header: 'UNAI Amount',
     align: 'right',
     sortable: true,
-    sortValue: (row) => Number(row.un_amount || 0),
-    render: (row) => formatAmount(row.un_amount),
+    sortValue: (row) => Number(row.display_amount ?? (row.is_realized ? row.realized_amount : null) ?? row.un_amount ?? 0),
+    render: renderUnaiAmount,
   },
 ];

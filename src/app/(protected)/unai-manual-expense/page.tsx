@@ -1,42 +1,148 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/api';
-import { Category, ExpenseItem, MoaData } from '../../../../types/moa';
-import { ExpensePayload } from './moaId.types';
-import { Button } from '@/components/ui/button';
 import { AlertCircle, Layers, LoaderCircle, MapPin, ReceiptText, WalletCards } from 'lucide-react';
-import CheckboxMultiSelect from '@/app/(protected)/components/CheckboxMultiSelect';
 import { toast } from 'sonner';
+import { Category, ExpenseItem } from '@/app/types/moa';
+import { Button } from '@/components/ui/button';
+import CheckboxMultiSelect from '@/app/(protected)/components/CheckboxMultiSelect';
+import DataTable from '@/app/(protected)/components/DataTable';
 import GTabs from '@/app/(protected)/components/GTabs';
+import PageHeader from '../components/PageHeader';
 import ExpenseTable from './ExpenseTable';
-import PageHeader from '../../../components/PageHeader';
+import { fetchAdminAccountTitles, fetchAdminMoaDetail, fetchAdminMoaList, syncUnaiManualExpenses } from './action';
+import { moaColumns } from './moa.columns';
+import { EditableExpenseItem, EditableExpensesMap, ExpenseRowValidationErrors, SelectedAccountsByLoc, UnaiManualExpensePayload } from './types';
 
-type EditableExpenseItem = Omit<ExpenseItem, 'amount'> & {
-  amount: number | string;
-  _tempId?: string;
+type RowPointer = {
+  locId: number;
+  accountKey: string;
+  row: EditableExpenseItem;
 };
 
-type ExpenseRowValidationErrors = Partial<Record<'due_date' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>;
-type ApiMasterAccountTitle = {
-  id: number;
-  account_no: string;
-  account_title: string;
+const getRowKey = (row: EditableExpenseItem) => row._tempId ?? `db-${row.id}`;
+
+const isNonEmpty = (value: unknown) => String(value ?? '').trim().length > 0;
+
+const isBlank = (value: unknown) => value === null || value === undefined || (typeof value === 'string' && value.trim().length === 0);
+
+const isExpenseRowEmpty = (row: EditableExpenseItem) => {
+  return isBlank(row.due_date) && isBlank(row.ref_no) && isBlank(row.payee) && isBlank(row.particulars) && isBlank(row.amount);
 };
 
-type EditableExpensesMap = Record<number, Record<string, EditableExpenseItem[]>>;
-type SelectedAccountsByLoc = Record<number, number[]>;
+const normalizeAmountForCompare = (value: EditableExpenseItem['amount']) => {
+  const rawValue = String(value ?? '').trim();
+  if (!rawValue) return '';
 
-export default function JVExpenseMoaDetailPage() {
+  const numericValue = Number(rawValue);
+  return Number.isFinite(numericValue) ? numericValue.toFixed(2) : rawValue;
+};
+
+const normalizeRowForCompare = (row: EditableExpenseItem, locId: number, accountKey: string) => {
+  return JSON.stringify({
+    moa_shared_id: row.moa_shared_id ?? null,
+    location_id: row.location_id ?? locId,
+    account_no: String(row.account_no ?? accountKey),
+    due_date: row.due_date ?? null,
+    due_date_from: row.due_date_from ?? null,
+    due_date_to: row.due_date_to ?? null,
+    ref_no: String(row.ref_no ?? '').trim(),
+    payee: String(row.payee ?? '').trim(),
+    particulars: String(row.particulars ?? '').trim(),
+    amount: normalizeAmountForCompare(row.amount),
+  });
+};
+
+const getAmountError = (value: EditableExpenseItem['amount']) => {
+  const rawValue = String(value ?? '').trim();
+
+  if (!rawValue) return 'Amount is required.';
+
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) return 'Amount must be a valid number.';
+  if (numericValue <= 0) return 'Amount must be greater than 0.';
+
+  return null;
+};
+
+const validateExpenseRow = (row: EditableExpenseItem): ExpenseRowValidationErrors => {
+  if (!row.id && isExpenseRowEmpty(row)) {
+    return {};
+  }
+
+  const errors: ExpenseRowValidationErrors = {};
+
+  if (!isNonEmpty(row.due_date)) {
+    errors.due_date = 'Date is required.';
+  }
+
+  if (!isNonEmpty(row.ref_no) || row._voucherValid !== true) {
+    errors.ref_no = 'Please select a valid voucher no. from the list.';
+  }
+
+  if (!isNonEmpty(row.payee)) {
+    errors.payee = 'Payee is required.';
+  }
+
+  if (!isNonEmpty(row.particulars)) {
+    errors.particulars = 'Particulars is required.';
+  }
+
+  const amountError = getAmountError(row.amount);
+  if (amountError) {
+    errors.amount = amountError;
+  }
+
+  return errors;
+};
+
+const flattenExpenseRows = (expenses: EditableExpensesMap): RowPointer[] => {
+  return Object.entries(expenses).flatMap(([locId, accounts]) =>
+    Object.entries(accounts).flatMap(([accountKey, rows]) =>
+      rows.map((row) => ({
+        locId: Number(locId),
+        accountKey,
+        row,
+      }))
+    )
+  );
+};
+
+const toUpsertPayload = ({ locId, accountKey, row }: RowPointer): UnaiManualExpensePayload => {
+  const payload: UnaiManualExpensePayload = {
+    location_id: row.location_id ?? locId,
+    account_no: row.account_no ?? accountKey,
+    particulars: String(row.particulars ?? '').trim(),
+    amount: Number(row.amount || 0),
+    due_date: row.due_date ?? null,
+    due_date_from: row.due_date_from ?? null,
+    due_date_to: row.due_date_to ?? null,
+    ref_no: String(row.ref_no ?? '').trim(),
+    payee: String(row.payee ?? '').trim(),
+  };
+
+  if (row.id) {
+    payload.id = row.id;
+  }
+
+  if (row.moa_shared_id) {
+    payload.moa_shared_id = row.moa_shared_id;
+  }
+
+  return payload;
+};
+
+function UnaiManualExpensePageContent() {
   const router = useRouter();
-  const params = useParams();
-  const moaId = params.moaId as string;
+  const searchParams = useSearchParams();
+  const moaId = searchParams.get('moa_id')?.trim() || '';
 
   const [tabIndex, setTabIndex] = useState(0);
   const [expenses, setExpenses] = useState<EditableExpensesMap>({});
   const [selectedAccountsByLoc, setSelectedAccountsByLoc] = useState<SelectedAccountsByLoc>({});
+  const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const tempIdRef = useRef(0);
 
@@ -45,18 +151,15 @@ export default function JVExpenseMoaDetailPage() {
     return `tmp-${tempIdRef.current}`;
   }, []);
 
-  const { data, isLoading, isError, error, refetch } = useQuery<MoaData>({
-    queryKey: ['jv-moa', moaId],
-    queryFn: async () => {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/jv/moa/show?id=${moaId}`);
-      const json = await res.json();
+  const moaListQuery = useQuery({
+    queryKey: ['admin-moa-list-for-unai-manual'],
+    queryFn: fetchAdminMoaList,
+    enabled: !moaId,
+  });
 
-      if (!res.ok) {
-        throw new Error(json.error || 'Failed');
-      }
-
-      return json.data;
-    },
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+    queryKey: ['admin-unai-manual-moa-detail', moaId],
+    queryFn: () => fetchAdminMoaDetail(moaId),
     enabled: !!moaId,
   });
 
@@ -66,28 +169,17 @@ export default function JVExpenseMoaDetailPage() {
     isError: categoriesIsError,
     error: categoriesError,
   } = useQuery<Category[]>({
-    queryKey: ['expense-categories'],
-    queryFn: async () => {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/jv/master-list/account-titles`);
-      const json: { success?: boolean; data?: ApiMasterAccountTitle[]; error?: string; message?: string } = await res.json();
-
-      if (!res.ok || json.success === false) {
-        throw new Error(json.error || json.message || 'Failed');
-      }
-
-      return (json.data ?? []).map((c) => ({
-        id: Number(c.account_no),
-        name: c.account_title,
-      }));
-    },
+    queryKey: ['admin-manual-expense-account-titles'],
+    queryFn: fetchAdminAccountTitles,
+    enabled: !!moaId,
   });
 
   const initialExpenses = useMemo<EditableExpensesMap>(() => {
-    if (!data?.expenses) return {};
+    if (!data?.unai_manual_expenses) return {};
 
     const mapped: EditableExpensesMap = {};
 
-    Object.entries(data.expenses).forEach(([locId, accounts]) => {
+    Object.entries(data.unai_manual_expenses).forEach(([locId, accounts]) => {
       mapped[Number(locId)] = {};
 
       Object.entries(accounts).forEach(([accountNo, items]) => {
@@ -96,6 +188,7 @@ export default function JVExpenseMoaDetailPage() {
           account_no: item.account_no ?? accountNo,
           particulars: item.particulars ?? '',
           due_date: item.due_date ?? null,
+          _voucherValid: isNonEmpty(item.ref_no),
           _tempId: item.id ? `db-${item.id}` : undefined,
         }));
       });
@@ -103,6 +196,16 @@ export default function JVExpenseMoaDetailPage() {
 
     return mapped;
   }, [data]);
+
+  const baselineById = useMemo(() => {
+    return flattenExpenseRows(initialExpenses).reduce<Record<number, string>>((acc, pointer) => {
+      if (pointer.row.id) {
+        acc[pointer.row.id] = normalizeRowForCompare(pointer.row, pointer.locId, pointer.accountKey);
+      }
+
+      return acc;
+    }, {});
+  }, [initialExpenses]);
 
   const initialSelectedAccountsByLoc = useMemo<SelectedAccountsByLoc>(() => {
     const mapped: SelectedAccountsByLoc = {};
@@ -114,10 +217,10 @@ export default function JVExpenseMoaDetailPage() {
     return mapped;
   }, [initialExpenses]);
 
-  const currentExpenses = Object.keys(expenses).length > 0 || !data?.expenses ? expenses : initialExpenses;
+  const currentExpenses = Object.keys(expenses).length > 0 || !data?.unai_manual_expenses ? expenses : initialExpenses;
 
   const currentSelectedAccountsByLoc =
-    Object.keys(selectedAccountsByLoc).length > 0 || !data?.expenses ? selectedAccountsByLoc : initialSelectedAccountsByLoc;
+    Object.keys(selectedAccountsByLoc).length > 0 || !data?.unai_manual_expenses ? selectedAccountsByLoc : initialSelectedAccountsByLoc;
 
   const visibleLocations = useMemo(() => {
     if (!data?.locations) return [];
@@ -132,80 +235,32 @@ export default function JVExpenseMoaDetailPage() {
   const selectedIds = activeLocation ? currentSelectedAccountsByLoc[activeLocation.id] || [] : [];
   const selectedCats = categories.filter((c) => selectedIds.includes(c.id));
 
-  const getRowKey = (row: EditableExpenseItem) => row._tempId ?? `db-${row.id}`;
+  const changedRows = useMemo(() => {
+    return flattenExpenseRows(currentExpenses).filter(({ locId, accountKey, row }) => {
+      if (!row.id) {
+        return !isExpenseRowEmpty(row);
+      }
 
-  const isNonEmpty = (value: unknown) => String(value ?? '').trim().length > 0;
+      const baseline = baselineById[row.id];
+      return normalizeRowForCompare(row, locId, accountKey) !== baseline;
+    });
+  }, [baselineById, currentExpenses]);
 
-  const isBlank = (value: unknown) => value === null || value === undefined || (typeof value === 'string' && value.trim().length === 0);
-
-  const isExpenseRowEmpty = (row: EditableExpenseItem) => {
-    return isBlank(row.due_date) && isBlank(row.ref_no) && isBlank(row.payee) && isBlank(row.particulars) && isBlank(row.amount);
-  };
-
-  const getCurrentSaveableRows = () => {
-    if (!activeLocation) return [];
-
-    return selectedIds.flatMap((accountId) => currentExpenses[activeLocation.id]?.[String(accountId)] ?? []).filter((row) => !isExpenseRowEmpty(row));
-  };
-
-  const getAmountError = (value: EditableExpenseItem['amount']) => {
-    const rawValue = String(value ?? '').trim();
-
-    if (!rawValue) return 'Amount is required.';
-
-    const numericValue = Number(rawValue);
-    if (!Number.isFinite(numericValue)) return 'Amount must be a valid number.';
-    if (numericValue <= 0) return 'Amount must be greater than 0.';
-
-    return null;
-  };
-
-  const validateExpenseRow = (row: EditableExpenseItem): ExpenseRowValidationErrors => {
-    if (isExpenseRowEmpty(row)) {
-      return {};
-    }
-
-    const errors: ExpenseRowValidationErrors = {};
-
-    if (!isNonEmpty(row.due_date)) {
-      errors.due_date = 'Date is required.';
-    }
-
-    if (!isNonEmpty(row.ref_no)) {
-      errors.ref_no = 'Reference no. is required.';
-    }
-
-    if (!isNonEmpty(row.payee)) {
-      errors.payee = 'Payee is required.';
-    }
-
-    if (!isNonEmpty(row.particulars)) {
-      errors.particulars = 'Particulars is required.';
-    }
-
-    const amountError = getAmountError(row.amount);
-    if (amountError) {
-      errors.amount = amountError;
-    }
-
-    return errors;
-  };
-
-  const getExpenseValidationErrors = (rows: EditableExpenseItem[]) => {
+  const getExpenseValidationErrors = (rows: RowPointer[]) => {
     const errors: Record<string, ExpenseRowValidationErrors> = {};
 
-    rows.forEach((item) => {
-      const rowErrors = validateExpenseRow(item);
+    rows.forEach(({ row }) => {
+      const rowErrors = validateExpenseRow(row);
 
       if (Object.keys(rowErrors).length > 0) {
-        errors[getRowKey(item)] = rowErrors;
+        errors[getRowKey(row)] = rowErrors;
       }
     });
 
     return errors;
   };
 
-  const rowValidationErrors = submitAttempted ? getExpenseValidationErrors(getCurrentSaveableRows()) : {};
+  const rowValidationErrors = submitAttempted ? getExpenseValidationErrors(changedRows) : {};
 
   const updateCell = (locId: number, catId: string | number, index: number, field: keyof ExpenseItem, value: string) => {
     const accountKey = String(catId);
@@ -220,6 +275,29 @@ export default function JVExpenseMoaDetailPage() {
       };
 
       rows[index] = nextRow;
+
+      return {
+        ...source,
+        [locId]: {
+          ...(source[locId] || {}),
+          [accountKey]: rows,
+        },
+      };
+    });
+  };
+
+  const updateVoucherCell = (locId: number, catId: string | number, index: number, value: string, voucherValid: boolean) => {
+    const accountKey = String(catId);
+
+    setExpenses((prev) => {
+      const source = Object.keys(prev).length > 0 ? prev : initialExpenses;
+      const rows = [...(source[locId]?.[accountKey] || [])];
+
+      rows[index] = {
+        ...rows[index],
+        ref_no: value,
+        _voucherValid: voucherValid,
+      };
 
       return {
         ...source,
@@ -246,11 +324,13 @@ export default function JVExpenseMoaDetailPage() {
             ...rows,
             {
               _tempId: makeTempId(),
+              location_id: locId,
               account_no: accountKey,
               particulars: '',
               amount: '',
               due_date: null,
               ref_no: '',
+              _voucherValid: false,
               payee: '',
             },
           ],
@@ -265,8 +345,15 @@ export default function JVExpenseMoaDetailPage() {
     setExpenses((prev) => {
       const source = Object.keys(prev).length > 0 ? prev : initialExpenses;
       const rows = [...(source[locId]?.[accountKey] || [])];
+      const [deletedRow] = rows.splice(index, 1);
 
-      rows.splice(index, 1);
+      if (deletedRow?.id) {
+        setDeletedIds((current) => {
+          const next = new Set(current);
+          next.add(deletedRow.id as number);
+          return next;
+        });
+      }
 
       return {
         ...source,
@@ -278,52 +365,19 @@ export default function JVExpenseMoaDetailPage() {
     });
   };
 
+  const upserts = useMemo(() => changedRows.map(toUpsertPayload), [changedRows]);
+  const deletePayload = useMemo(() => Array.from(deletedIds), [deletedIds]);
+  const hasExpenseChanges = upserts.length > 0 || deletePayload.length > 0;
+  const showSaveActions = hasExpenseChanges || isFetching;
+
   const mutation = useMutation({
-    mutationFn: async () => {
-      const payload: ExpensePayload[] = [];
-
-      if (activeLocation) {
-        selectedIds.forEach((accountId) => {
-          const accountKey = String(accountId);
-          const items = currentExpenses[activeLocation.id]?.[accountKey] ?? [];
-
-          items
-            .filter((item) => !isExpenseRowEmpty(item))
-            .forEach((item) => {
-              payload.push({
-                id: item.id ?? null,
-                location_id: activeLocation.id,
-                account_no: item.account_no ?? accountKey,
-                particulars: item.particulars ?? '',
-                amount: Number(item.amount || 0),
-                due_date: item.due_date ?? null,
-                ref_no: item.ref_no,
-                payee: item.payee,
-              });
-            });
-        });
-      }
-
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/jv/expenses/sync`, {
-        method: 'POST',
-        body: JSON.stringify({
-          moa_id: Number(moaId),
-          expenses: payload,
-        }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json.error || 'Failed');
-      }
-
-      return json;
-    },
+    mutationFn: () => syncUnaiManualExpenses(moaId, upserts, deletePayload),
     onSuccess: async () => {
-      toast.success('Saved successfully');
+      toast.success('UNAI manual expenses saved successfully');
       setExpenses({});
       setSelectedAccountsByLoc({});
+      setDeletedIds(new Set());
+      setSubmitAttempted(false);
       await refetch();
     },
     onError: (err) => {
@@ -338,7 +392,9 @@ export default function JVExpenseMoaDetailPage() {
   const handleSave = () => {
     setSubmitAttempted(true);
 
-    if (Object.keys(getExpenseValidationErrors(getCurrentSaveableRows())).length > 0) {
+    if (!hasExpenseChanges) return;
+
+    if (Object.keys(getExpenseValidationErrors(changedRows)).length > 0) {
       toast.error('Please complete all required expense row fields.');
       return;
     }
@@ -349,16 +405,48 @@ export default function JVExpenseMoaDetailPage() {
   const selectedRows = activeLocation ? selectedCats.flatMap((cat) => currentExpenses[activeLocation.id]?.[String(cat.id)] || []) : [];
 
   const currentTotalAmount = selectedRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const changedRowCount = upserts.length;
+  const deletedRowCount = deletePayload.length;
+
+  if (!moaId) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="UNAI Manual Expense" subtitle="Select an MOA to encode Admin/UNAI manual expense entries." icon={ReceiptText} />
+
+        <div className="mt-4">
+          {moaListQuery.isLoading ? (
+            <DataTable rows={[]} columns={moaColumns} getRowKey={(row) => row.id} loading />
+          ) : moaListQuery.isError ? (
+            <div className="rounded-2xl border border-dashed border-border bg-background/70 px-4 py-3 text-sm text-muted-foreground">
+              Open this page with a MOA query parameter, for example <span className="font-medium">/unai-manual-expense?moa_id=123</span>.
+            </div>
+          ) : moaListQuery.data && moaListQuery.data.length > 0 ? (
+            <DataTable
+              rows={moaListQuery.data}
+              columns={moaColumns}
+              getRowKey={(row) => row.id}
+              onRowClick={(row) => router.push(`/unai-manual-expense?moa_id=${row.id}`)}
+            />
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-background/70 px-4 py-3 text-sm text-muted-foreground">
+              No MOAs found. Open this page with a MOA query parameter, for example{' '}
+              <span className="font-medium">/unai-manual-expense?moa_id=123</span>.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader
-          title="JV Expense Detail"
+          title="UNAI Manual Expense"
           subtitle="Loading MOA expense details"
           icon={ReceiptText}
           actions={
-            <Button variant="outline" onClick={() => router.push('/jv/expense-moas')}>
+            <Button variant="outline" onClick={() => router.push('/unai-manual-expense')}>
               Back
             </Button>
           }
@@ -378,11 +466,11 @@ export default function JVExpenseMoaDetailPage() {
     return (
       <div className="space-y-6">
         <PageHeader
-          title="JV Expense Detail"
+          title="UNAI Manual Expense"
           subtitle="Unable to load MOA expense details"
           icon={ReceiptText}
           actions={
-            <Button variant="outline" onClick={() => router.push('/jv/expense-moas')}>
+            <Button variant="outline" onClick={() => router.push('/unai-manual-expense')}>
               Back
             </Button>
           }
@@ -405,16 +493,18 @@ export default function JVExpenseMoaDetailPage() {
     <div className="space-y-6">
       <PageHeader
         title={data.moa.moa_name}
-        subtitle="JV Expense Detail"
+        subtitle="UNAI Manual Expense"
         icon={ReceiptText}
         actions={
           <>
-            <Button variant="outline" onClick={() => router.push('/jv/expense-moas')}>
+            <Button variant="outline" onClick={() => router.push('/unai-manual-expense')}>
               Back
             </Button>
-            <Button onClick={handleSave} disabled={mutation.isPending || !activeLocation} className="h-10 rounded-xl px-5">
-              {mutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : 'Save JV Expenses'}
-            </Button>
+            {(showSaveActions || mutation.isPending) && (
+              <Button onClick={handleSave} disabled={mutation.isPending || isFetching || !hasExpenseChanges} className="h-10 rounded-xl px-5">
+                {mutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : 'Save UNAI Manual Expenses'}
+              </Button>
+            )}
           </>
         }
       />
@@ -553,6 +643,7 @@ export default function JVExpenseMoaDetailPage() {
                     addRow={addRow}
                     deleteRow={deleteRow}
                     updateCell={updateCell}
+                    updateVoucherCell={updateVoucherCell}
                     submitAttempted={submitAttempted}
                     rowValidationErrors={rowValidationErrors}
                   />
@@ -567,35 +658,57 @@ export default function JVExpenseMoaDetailPage() {
             )}
           </div>
 
-          <div className="sticky bottom-4 z-10 rounded-3xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3 text-sm">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background">
-                  <WalletCards className="size-4 text-muted-foreground" />
+          {(showSaveActions || mutation.isPending) && (
+            <div className="sticky bottom-4 z-10 rounded-3xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3 text-sm">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background">
+                    <WalletCards className="size-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">UNAI manual expense changes</p>
+                    <p className="text-muted-foreground">
+                      {hasExpenseChanges
+                        ? `${changedRowCount} changed/new ${changedRowCount === 1 ? 'row' : 'rows'} and ${deletedRowCount} deleted ${
+                            deletedRowCount === 1 ? 'row' : 'rows'
+                          } ready to save.`
+                        : 'Refreshing expense rows...'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-foreground">Ready to save JV expense entries</p>
-                  <p className="text-muted-foreground">
-                    {selectedRows.length} {selectedRows.length === 1 ? 'row' : 'rows'} selected across {selectedCats.length}{' '}
-                    {selectedCats.length === 1 ? 'account' : 'accounts'}.
-                  </p>
-                </div>
-              </div>
 
-              <Button onClick={handleSave} disabled={mutation.isPending || !activeLocation} className="h-10 rounded-xl px-6">
-                {mutation.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <LoaderCircle className="size-4 animate-spin" />
-                    Saving...
-                  </span>
-                ) : (
-                  'Save JV Expenses'
-                )}
-              </Button>
+                <Button onClick={handleSave} disabled={mutation.isPending || isFetching || !hasExpenseChanges} className="h-10 rounded-xl px-6">
+                  {mutation.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <LoaderCircle className="size-4 animate-spin" />
+                      Saving...
+                    </span>
+                  ) : (
+                    'Save UNAI Manual Expenses'
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
+  );
+}
+
+export default function UnaiManualExpensePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-3xl border border-border bg-card p-8 text-sm text-muted-foreground shadow-sm">
+          <div className="flex items-center gap-3">
+            <LoaderCircle className="size-5 animate-spin" />
+            Loading UNAI manual expense page...
+          </div>
+        </div>
+      }
+    >
+      <UnaiManualExpensePageContent />
+    </Suspense>
   );
 }

@@ -7,28 +7,15 @@ import { cn } from '@/lib/utils';
 import { CalendarIcon, Trash2 } from 'lucide-react';
 import { Column } from '@/app/(protected)/components/DataTable';
 import { ExpenseItem as BaseExpenseItem } from '@/app/types/moa';
-
-type UserMeta = {
-  email?: string | null;
-  role_name?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  company_name?: string | null;
-};
-
-export type EditableExpenseItem = Omit<BaseExpenseItem, 'amount'> & {
-  amount: number | string;
-  _tempId?: string;
-  user?: UserMeta;
-};
-
-type ExpenseRowValidationErrors = Partial<Record<'due_date' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>;
+import VoucherSuggestInput from './components/VoucherSuggestInput';
+import { EditableExpenseItem, ExpenseRowValidationErrors } from './types';
 
 type GetExpenseTableColumnsParams = {
   locId: number;
   catId: string | number;
   deleteRow: (locId: number, catId: string | number, index: number) => void;
   updateCell: (locId: number, catId: string | number, index: number, field: keyof BaseExpenseItem, value: string) => void;
+  updateVoucherCell: (locId: number, catId: string | number, index: number, value: string, voucherValid: boolean) => void;
   submitAttempted: boolean;
   rowValidationErrors: Record<string, ExpenseRowValidationErrors>;
 };
@@ -46,6 +33,7 @@ export function getExpenseTableColumns({
   catId,
   deleteRow,
   updateCell,
+  updateVoucherCell,
   submitAttempted,
   rowValidationErrors,
 }: GetExpenseTableColumnsParams): Column<EditableExpenseItem>[] {
@@ -65,16 +53,13 @@ export function getExpenseTableColumns({
       },
       render: (row) => {
         const u = row.user;
-
         const fullName = [u?.last_name, u?.first_name].filter(Boolean).join(', ');
         const fallbackName = u?.email || '-';
 
         return (
           <div className="max-w-[180px] text-xs leading-tight">
             <p className="font-medium">{fullName || fallbackName}</p>
-
             {u?.company_name && <p className="truncate text-muted-foreground">{u.company_name}</p>}
-
             {u?.role_name && (
               <p className={u.role_name === 'ADMIN' ? 'text-xs font-semibold text-red-500' : 'text-muted-foreground'}>
                 {u.role_name === 'ADMIN' ? 'UNAI' : u.role_name}
@@ -124,17 +109,19 @@ export function getExpenseTableColumns({
       },
     },
     {
-      header: 'Ref No',
+      header: 'Voucher No.',
       sortable: true,
       sortValue: (row) => row.ref_no ?? '',
       render: (row, index) => {
         const error = getFieldError(row, 'ref_no');
 
         return (
-          <div>
-            <Input value={row.ref_no || ''} onChange={(e) => updateCell(locId, catId, index, 'ref_no', e.target.value)} aria-invalid={!!error} />
-            <FieldError message={error} />
-          </div>
+          <VoucherSuggestInput
+            value={row.ref_no || ''}
+            isValid={row._voucherValid}
+            error={error}
+            onChange={(value, voucherValid) => updateVoucherCell(locId, catId, index, value, voucherValid)}
+          />
         );
       },
     },

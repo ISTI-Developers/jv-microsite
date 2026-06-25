@@ -1,24 +1,25 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Button } from '@/components/ui/button';
 import DataTable from '@/app/(protected)/components/DataTable';
 import { ExpenseItem as BaseExpenseItem } from '@/app/types/moa';
-import { EditableExpenseItem, getExpenseTableColumns } from './ExpenseTable.columns';
+import { Button } from '@/components/ui/button';
+import { EditableRevenueItem, RevenueRowValidationErrors } from './types';
+import { getRevenueTableColumns } from './RevenueTable.columns';
 
 type Props = {
   locId: number;
   catId: string | number;
   catName: string;
-  rows: EditableExpenseItem[];
+  rows: EditableRevenueItem[];
   addRow: (locId: number, catId: string | number) => void;
   deleteRow: (locId: number, catId: string | number, index: number) => void;
   updateCell: (locId: number, catId: string | number, index: number, field: keyof BaseExpenseItem, value: string) => void;
   submitAttempted: boolean;
-  rowValidationErrors: Record<string, Partial<Record<'due_date' | 'ref_no' | 'payee' | 'particulars' | 'amount', string>>>;
+  rowValidationErrors: Record<string, RevenueRowValidationErrors>;
 };
 
-export default function ExpenseTable({ locId, catId, catName, rows, addRow, deleteRow, updateCell, submitAttempted, rowValidationErrors }: Props) {
+export default function RevenueTable({ locId, catId, catName, rows, addRow, deleteRow, updateCell, submitAttempted, rowValidationErrors }: Props) {
   const totalAmount = useMemo(() => {
     return rows.reduce((sum, row) => {
       const amount = Number(row.amount) || 0;
@@ -26,7 +27,7 @@ export default function ExpenseTable({ locId, catId, catName, rows, addRow, dele
     }, 0);
   }, [rows]);
 
-  const columns = getExpenseTableColumns({ locId, catId, deleteRow, updateCell, submitAttempted, rowValidationErrors });
+  const columns = getRevenueTableColumns({ locId, catId, deleteRow, updateCell, submitAttempted, rowValidationErrors });
 
   return (
     <div className="space-y-4 rounded-3xl border border-border bg-card p-4 shadow-sm">
@@ -34,7 +35,7 @@ export default function ExpenseTable({ locId, catId, catName, rows, addRow, dele
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-foreground">{catName}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {rows.length} {rows.length === 1 ? 'expense row' : 'expense rows'}
+            {rows.length} {rows.length === 1 ? 'revenue row' : 'revenue rows'}
           </p>
         </div>
 
@@ -45,7 +46,7 @@ export default function ExpenseTable({ locId, catId, catName, rows, addRow, dele
 
       {rows.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-background/70 px-4 py-3 text-sm text-muted-foreground">
-          No rows yet. Use Add Row to start entering expenses for this account.
+          No rows yet. Use Add Row to start entering UNAI manual revenue for this account.
         </div>
       )}
 
