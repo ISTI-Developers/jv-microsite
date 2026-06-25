@@ -35,6 +35,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, {
         method: 'GET',
         router,
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
       });
 
       if (!res.ok) throw new Error();
